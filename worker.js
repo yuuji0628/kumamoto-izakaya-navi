@@ -59,7 +59,7 @@ async function hashPassword(password, saltB64) {
       name: "PBKDF2",
       hash: "SHA-256",
       salt: fromB64url(saltB64),
-      iterations: 160000
+      iterations: 20000
     },
     key,
     256
@@ -283,7 +283,7 @@ async function handleApi(request, env, url) {
     const me = await requireAdmin(request, env);
     return json({
       ok:true,
-      version:"1.08",
+      version:"1.09",
       reset_applied,
       needs_setup: count===0,
       authenticated: !!me,
@@ -292,19 +292,31 @@ async function handleApi(request, env, url) {
   }
 
   if (url.pathname === "/api/admin/bootstrap" && request.method === "POST") {
-    if (await adminCount(env) > 0) return json({ok:false,error:"ALREADY_INITIALIZED"},{status:409});
-    let x; try { x = await request.json(); } catch { return json({ok:false,error:"INVALID_JSON"},{status:400}); }
-    const email = clean(x.email, 200).toLowerCase();
-    const password = String(x.password || "");
-    if (!email || !email.includes("@")) return json({ok:false,error:"EMAIL_REQUIRED"},{status:400});
-    if (password.length < 8) return json({ok:false,error:"PASSWORD_TOO_SHORT"},{status:400});
-    const salt = randomToken(16);
-    const hash = await hashPassword(password, salt);
-    const t = nowIso();
-    await env.DB.prepare(
-      "INSERT INTO admins(email,password_hash,password_salt,created_at) VALUES(?,?,?,?)"
-    ).bind(email, hash, salt, t).run();
-    return json({ok:true});
+    try {
+      if (await adminCount(env) > 0) return json({ok:false,error:"ALREADY_INITIALIZED"},{status:409});
+      let x; try { x = await request.json(); } catch { return json({ok:false,error:"INVALID_JSON"},{status:400}); }
+      const email = clean(x.email, 200).toLowerCase();
+      const password = String(x.password || "");
+      if (!email || !email.includes("@")) return json({ok:false,error:"EMAIL_REQUIRED"},{status:400});
+      if (password.length < 8) return json({ok:false,error:"PASSWORD_TOO_SHORT"},{status:400});
+
+      const salt = randomToken(16);
+      const hash = await hashPassword(password, salt);
+      const t = nowIso();
+
+      await env.DB.prepare(
+        "INSERT INTO admins(email,password_hash,password_salt,created_at) VALUES(?,?,?,?)"
+      ).bind(email, hash, salt, t).run();
+
+      return json({ok:true,version:"1.09"});
+    } catch (e) {
+      return json({
+        ok:false,
+        error:"BOOTSTRAP_FAILED",
+        detail:String(e?.message || e),
+        version:"1.09"
+      }, {status:500});
+    }
   }
 
   if (url.pathname === "/api/admin/login" && request.method === "POST") {
@@ -378,7 +390,7 @@ async function handleApi(request, env, url) {
   }
 
   if (url.pathname === "/api/admin/version" && request.method === "GET") {
-    return json({ok:true,version:"1.08",admin_setup_fix:true,d1_schema_fix:true});
+    return json({ok:true,version:"1.09",admin_setup_fix:true,d1_schema_fix:true});
   }
 
   // everything below requires admin

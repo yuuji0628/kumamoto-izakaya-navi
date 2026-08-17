@@ -22,7 +22,7 @@ button{width:100%;height:52px;border:0;border-radius:13px;background:linear-grad
     <button id="submit">ログイン</button>
   </form>
   <div id="msg" class="msg"></div>
-  <div class="sub" id="hint">管理者のみアクセスできます。</div><div class="sub" style="text-align:center;opacity:.55">ver1.08</div>
+  <div class="sub" id="hint">管理者のみアクセスできます。</div><div class="sub" style="text-align:center;opacity:.55">ver1.09</div>
   <a class="back" href="/">← サイトへ戻る</a>
 </div>
 <script>
@@ -50,9 +50,10 @@ form.addEventListener("submit",async e=>{
     if(needsSetup){
       if(password.length<8)return msg("パスワードは8文字以上にしてください。");
       if(password!==document.getElementById("confirm").value)return msg("確認用パスワードが一致しません。");
-      const r=await fetch("/api/admin/bootstrap",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,password})});
-      const d=await r.json();
-      if(!r.ok||!d.ok)return msg("管理者作成に失敗しました。");
+      const r=await fetch("/api/admin/bootstrap?v=109&t="+Date.now(),{method:"POST",headers:{"content-type":"application/json","cache-control":"no-cache"},body:JSON.stringify({email,password})});
+      const raw=await r.text();
+      let d={}; try{d=JSON.parse(raw)}catch{d={ok:false,error:"HTTP_"+r.status,detail:raw.slice(0,120)}}
+      if(!r.ok||!d.ok)return msg("管理者作成に失敗しました: "+(d.error||"UNKNOWN")+(d.detail?" / "+d.detail:""));
       needsSetup=false;setupNotice.style.display="none";document.getElementById("confirmLabel").style.display="none";document.getElementById("confirm").style.display="none";document.getElementById("confirm").required=false;submit.textContent="ログイン";
       msg("管理者を作成しました。続けてログインしてください。");return;
     }
