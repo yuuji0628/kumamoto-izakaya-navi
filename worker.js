@@ -334,11 +334,27 @@ async function forceSetupOnceVer106(env) {
   return true;
 }
 
+function adminCookieToken(request) {
+  const raw = request.headers.get("cookie") || "";
+  for (const part of raw.split(";")) {
+    const [k, ...rest] = part.trim().split("=");
+    if (k === "kin_admin_session") return decodeURIComponent(rest.join("="));
+  }
+  return "";
+}
+
+function setAdminCookie(token) {
+  return `kin_admin_session=${encodeURIComponent(token)}; Path=/; Max-Age=${30*24*60*60}; HttpOnly; Secure; SameSite=Lax`;
+}
+
+function clearAdminCookie() {
+  return "kin_admin_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax";
+}
+
 async function requireAdmin(request, env) {
   await ensureSchema(env);
   const auth = request.headers.get("authorization") || "";
-  if (!auth.startsWith("Bearer ")) return null;
-  const token = auth.slice(7).trim();
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : adminCookieToken(request);
   if (!token) return null;
   const tokenHash = await hashToken(token);
   const now = nowIso();
@@ -436,16 +452,17 @@ async function handleApi(request, env, url) {
       INSERT INTO admin_sessions(admin_id,token_hash,expires_at,created_at)
       VALUES(?,?,?,?)
     `).bind(admin.id, tokenHash, expires, nowIso()).run();
-    return json({ok:true, token, expires_at:expires});
+    return json({ok:true, token, expires_at:expires},{headers:{"set-cookie":setAdminCookie(token)}});
   }
 
   if (url.pathname === "/api/admin/logout" && request.method === "POST") {
     const auth = request.headers.get("authorization") || "";
-    if (auth.startsWith("Bearer ")) {
-      const tokenHash = await hashToken(auth.slice(7).trim());
+    const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : adminCookieToken(request);
+    if (token) {
+      const tokenHash = await hashToken(token);
       await env.DB.prepare("DELETE FROM admin_sessions WHERE token_hash=?").bind(tokenHash).run();
     }
-    return json({ok:true});
+    return json({ok:true},{headers:{"set-cookie":clearAdminCookie()}});
   }
 
   // ----- Public -----
@@ -880,10 +897,24 @@ export default {
     }
 
     if (url.pathname === "/admin-login" || url.pathname === "/admin-login/") {
-      return serveAsset(env, request, "/admin-login.html");
+      if (await requireAdmin(request, env)) {
+        return Response.redirect(new URL("/admin", request.url).toString(), 302);
+      }
+      const r = await serveAsset(env, request, "/admin-login.html");
+      const h = new Headers(r.headers);
+      h.set("Cache-Control","no-store, no-cache, must-revalidate, max-age=0");
+      h.set("Pragma","no-cache");
+      return new Response(r.body,{status:r.status,statusText:r.statusText,headers:h});
     }
     if (url.pathname === "/admin" || url.pathname === "/admin/") {
-      return serveAsset(env, request, "/admin.html");
+      if (!(await requireAdmin(request, env))) {
+        return Response.redirect(new URL("/admin-login", request.url).toString(), 302);
+      }
+      const r = await serveAsset(env, request, "/admin.html");
+      const h = new Headers(r.headers);
+      h.set("Cache-Control","no-store, no-cache, must-revalidate, max-age=0");
+      h.set("Pragma","no-cache");
+      return new Response(r.body,{status:r.status,statusText:r.statusText,headers:h});
     }
     if (url.pathname === "/db-status") {
       try {
