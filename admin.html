@@ -19,7 +19,16 @@ button,input,select,textarea{font:inherit}.top{position:sticky;top:0;z-index:20;
 .searchbar{display:grid;grid-template-columns:1fr 1fr auto;gap:7px;margin-bottom:10px}.searchbar input,.searchbar select{background:#07101a;border:1px solid #344452;color:#fff;border-radius:10px;padding:10px;font-size:11px}
 .access-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.access-card{padding:17px;background:var(--panel);border:1px solid var(--line);border-radius:14px}.access-card b{font-size:24px;color:var(--gold)}.access-card small{display:block;color:var(--muted)}
 .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#101b25;border:1px solid #40505e;color:#e9eef2;border-radius:999px;padding:10px 15px;font-size:11px;display:none;z-index:80}.toast.show{display:block}
-@media(max-width:650px){.stats{grid-template-columns:1fr 1fr}.formgrid{grid-template-columns:1fr}.field.full{grid-column:auto}.searchbar{grid-template-columns:1fr 1fr}.searchbar button{grid-column:1/-1}.hero h1{font-size:24px}.brand b{font-size:15px}}
+
+.site-update-layout{display:grid;grid-template-columns:260px minmax(0,1fr);gap:10px}
+.site-file-list{display:grid;gap:6px;align-content:start}.site-file-btn{width:100%;text-align:left;background:#09121a;border:1px solid #344452;color:#bdc6ce;border-radius:10px;padding:10px;font-size:10px}.site-file-btn.active{border-color:#8a6d25;color:#f0c85d;background:rgba(232,186,72,.06)}
+.codebox{width:100%;min-height:480px;background:#050a0f;border:1px solid #334350;color:#dfe6eb;border-radius:12px;padding:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;line-height:1.55;resize:vertical;tab-size:2}
+.commitbar{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:8px}.commitbar input{background:#07101a;border:1px solid #344452;color:#fff;border-radius:10px;padding:10px;font-size:11px}
+.confirm-box{margin-top:9px;padding:11px;border:1px solid #654f21;border-radius:11px;background:rgba(232,186,72,.04)}.confirm-box input{width:100%;background:#07101a;border:1px solid #55471f;color:#fff;border-radius:9px;padding:10px;font-size:12px;margin:6px 0}
+.deploy-result{margin-top:9px;padding:11px;border:1px solid #365544;border-radius:11px;color:#83d19d;background:rgba(80,150,100,.05);display:none;font-size:10px;line-height:1.6}
+.github-status{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:10px}.dot{width:8px;height:8px;border-radius:50%;background:#6d7780}.dot.ok{background:#60c281}.dot.ng{background:#d36c6c}
+
+@media(max-width:650px){.site-update-layout{grid-template-columns:1fr}.site-file-list{grid-template-columns:repeat(2,1fr)}.codebox{min-height:420px}.commitbar{grid-template-columns:1fr}.commitbar button{width:100%}.stats{grid-template-columns:1fr 1fr}.formgrid{grid-template-columns:1fr}.field.full{grid-column:auto}.searchbar{grid-template-columns:1fr 1fr}.searchbar button{grid-column:1/-1}.hero h1{font-size:24px}.brand b{font-size:15px}}
 </style></head><body>
 <header class="top"><div class="topin"><div class="brand"><img src="logo-emblem.jpg"><div><b>熊本居酒屋ナビ 管理</b><small>KUMAMOTO IZAKAYA NAVI</small></div></div><div class="top-actions"><a class="ghost" href="/" target="_blank">サイト</a><button id="logout" class="ghost">ログアウト</button></div></div></header>
 <main class="wrap">
@@ -31,6 +40,7 @@ button,input,select,textarea{font:inherit}.top{position:sticky;top:0;z-index:20;
 <button class="tab" data-tab="submissions">申込み</button>
 <button class="tab" data-tab="requests">店舗申請</button>
 <button class="tab" data-tab="leads">開拓</button>
+<button class="tab" data-tab="siteupdate">サイト更新</button>
 <button class="tab" data-tab="access">アクセス</button>
 </div>
 
@@ -80,6 +90,35 @@ button,input,select,textarea{font:inherit}.top{position:sticky;top:0;z-index:20;
 <div class="section-head"><h2>開拓候補</h2><button class="mini" onclick="loadAll()">更新</button></div><div id="leadList"></div>
 </section>
 
+
+<section id="panel-siteupdate" class="panel">
+  <div class="notice">
+    GitHubのサイト本体ファイルを管理画面から直接編集します。保存するとGitHubへコミットされ、Cloudflareの自動デプロイが始まります。<br>
+    <b>店舗情報の更新には使わず、HTML/CSS/JSなどサイト本体の変更専用です。</b>
+  </div>
+  <div class="github-status"><span id="ghDot" class="dot"></span><b id="ghStatusText">GitHub接続確認中...</b><span id="ghRepo" class="meta"></span></div>
+  <div id="ghSetupHelp" class="notice" style="display:none">
+    Cloudflare WorkerのSecretに <b>GITHUB_TOKEN</b> を1回だけ登録してください。トークンは管理画面やHTMLには表示されません。
+  </div>
+  <div class="site-update-layout">
+    <div>
+      <div class="section-head"><h2>ファイル</h2><button class="mini" id="ghReload">再読込</button></div>
+      <div id="ghFiles" class="site-file-list"></div>
+    </div>
+    <div class="formcard" style="margin:0">
+      <div class="section-head"><h2 id="ghFileTitle">ファイルを選択</h2><span id="ghFileMeta" class="meta"></span></div>
+      <textarea id="ghEditor" class="codebox" spellcheck="false" placeholder="左から編集するファイルを選択してください"></textarea>
+      <div class="commitbar"><input id="ghMessage" placeholder="コミットメッセージ（例: 管理画面からトップページ修正）"><button id="ghCommit" class="gold" type="button">GitHubへ反映</button></div>
+      <div class="confirm-box">
+        <div class="meta">誤操作防止のため、反映前に下の欄へ <b style="color:#e8ba48">GITHUBへ反映</b> と入力してください。</div>
+        <input id="ghConfirm" placeholder="GITHUBへ反映">
+        <div class="meta">※ 保存後はGitHubの履歴に残ります。Cloudflareが自動デプロイします。</div>
+      </div>
+      <div id="ghResult" class="deploy-result"></div>
+    </div>
+  </div>
+</section>
+
 <section id="panel-access" class="panel"><div class="section-head"><h2>アクセス / 運営状況</h2></div><div id="accessGrid" class="access-grid"></div></section>
 </main>
 <div id="toast" class="toast"></div>
@@ -117,6 +156,61 @@ leadAdd.onclick=async()=>{if(!leadName.value.trim())return toast("店舗名を�
 window.markLead=async(id,status)=>{await api("/api/admin/leads/"+id,{method:"PATCH",body:JSON.stringify({status})});loadAll()}
 window.deleteLead=async id=>{await api("/api/admin/leads/"+id,{method:"DELETE"});loadAll()}
 window.leadToShop=id=>{const l=leads.find(x=>x.id===id);if(!l)return;clearShop();name.value=l.name||"";area.value=l.area||"";genre.value=l.genre||"";address.value=l.address||"";instagram.value=l.instagram||"";phone.value=l.phone||"";description.value=l.snippet||"";document.querySelector('[data-tab="shops"]').click();window.scrollTo({top:0,behavior:"smooth"})}
+
+let ghCurrent={path:"",sha:""};
+const ghFallbackFiles=["index.html","style.css","script.js","admin.html","admin-login.html","worker.js","wrangler.jsonc","listing-form.html","izakayas.html","shop.html","jobs.html","areas.html","contact.html","robots.txt"];
+
+async function loadGithubStatus(){
+  try{
+    const d=await api("/api/admin/github/status");
+    ghRepo.textContent=`${d.owner}/${d.repo} (${d.branch})`;
+    ghFiles.innerHTML=(d.editable_files||ghFallbackFiles).map(p=>`<button type="button" class="site-file-btn" data-gh-file="${p}">${p}</button>`).join("");
+    document.querySelectorAll("[data-gh-file]").forEach(b=>b.onclick=()=>loadGithubFile(b.dataset.ghFile));
+    if(d.configured&&d.connected){
+      ghDot.className="dot ok";ghStatusText.textContent="GitHub接続済み";ghSetupHelp.style.display="none";
+    }else{
+      ghDot.className="dot ng";ghStatusText.textContent=d.configured?"GitHub接続エラー":"GITHUB_TOKEN未設定";ghSetupHelp.style.display="block";
+    }
+  }catch(e){
+    ghDot.className="dot ng";ghStatusText.textContent="GitHub接続確認に失敗";ghSetupHelp.style.display="block";
+  }
+}
+async function loadGithubFile(path){
+  if(!path)return;
+  ghEditor.value="読み込み中...";ghFileTitle.textContent=path;ghFileMeta.textContent="";
+  try{
+    const d=await api("/api/admin/github/file?path="+encodeURIComponent(path));
+    ghCurrent={path:d.path,sha:d.sha};ghEditor.value=d.content||"";ghFileMeta.textContent=`${d.size||0} bytes`;
+    ghMessage.value=`admin: update ${path}`;
+    ghConfirm.value="";
+    document.querySelectorAll("[data-gh-file]").forEach(b=>b.classList.toggle("active",b.dataset.ghFile===path));
+  }catch(e){ghEditor.value="";toast("読込失敗: "+e.message)}
+}
+ghReload.onclick=()=>loadGithubStatus();
+ghCommit.onclick=async()=>{
+  if(!ghCurrent.path||!ghCurrent.sha)return toast("ファイルを選択してください");
+  if(ghConfirm.value.trim()!=="GITHUBへ反映")return toast("確認文字を入力してください");
+  if(!confirm(`${ghCurrent.path} をGitHubへ反映しますか？`))return;
+  ghCommit.disabled=true;ghCommit.textContent="反映中...";
+  ghResult.style.display="none";
+  try{
+    const d=await api("/api/admin/github/file",{method:"PUT",body:JSON.stringify({
+      path:ghCurrent.path,sha:ghCurrent.sha,content:ghEditor.value,
+      message:ghMessage.value||`admin: update ${ghCurrent.path}`,
+      confirm:ghConfirm.value.trim()
+    })});
+    ghResult.style.display="block";
+    ghResult.innerHTML=`✅ GitHubへ反映しました。<br>${esc(d.message||"Cloudflareが自動デプロイします。")}<br>Commit: ${esc((d.commit_sha||"").slice(0,12))}`;
+    toast("GitHubへ反映しました");
+    await loadGithubFile(ghCurrent.path);
+  }catch(e){
+    toast("反映失敗: "+e.message);
+  }finally{
+    ghCommit.disabled=false;ghCommit.textContent="GitHubへ反映";
+  }
+}
+loadGithubStatus();
+
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");$("panel-"+b.dataset.tab).classList.add("active")});
 logout.onclick=async()=>{try{await api("/api/admin/logout",{method:"POST"})}catch{}localStorage.removeItem("kin_admin_token");location.href="/admin-login"}
 loadAll();

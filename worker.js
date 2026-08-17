@@ -67,6 +67,72 @@ async function hashPassword(password, saltB64) {
   return b64url(new Uint8Array(bits));
 }
 
+
+const GITHUB_EDITABLE_FILES = new Set([
+  "index.html","style.css","script.js","admin.html","admin-login.html","worker.js","wrangler.jsonc",
+  "listing-form.html","izakayas.html","shop.html","jobs.html","areas.html","contact.html","robots.txt"
+]);
+
+function githubConfig(env) {
+  return {
+    owner: clean(env.GITHUB_OWNER || "yuuji0628", 100),
+    repo: clean(env.GITHUB_REPO || "kumamoto-izakaya-navi", 120),
+    branch: clean(env.GITHUB_BRANCH || "main", 100),
+    token: String(env.GITHUB_TOKEN || "").trim()
+  };
+}
+
+function githubHeaders(token) {
+  return {
+    "Accept": "application/vnd.github+json",
+    "Authorization": `Bearer ${token}`,
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "KUMAMOTO-IZAKAYA-NAVI-ADMIN"
+  };
+}
+
+function utf8ToBase64(str) {
+  const bytes = enc.encode(String(str));
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i=0;i<bytes.length;i+=chunk) {
+    bin += String.fromCharCode(...bytes.subarray(i, i+chunk));
+  }
+  return btoa(bin);
+}
+
+function base64ToUtf8(str) {
+  const bin = atob(String(str || "").replace(/\n/g,""));
+  const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+async function githubApi(env, path, init={}) {
+  const c = githubConfig(env);
+  if (!c.token) {
+    const e = new Error("GITHUB_TOKEN_MISSING");
+    e.code = "GITHUB_TOKEN_MISSING";
+    throw e;
+  }
+  const r = await fetch(`https://api.github.com${path}`, {
+    ...init,
+    headers: {
+      ...githubHeaders(c.token),
+      ...(init.headers || {})
+    }
+  });
+  const raw = await r.text();
+  let data = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch { data = {message:raw}; }
+  if (!r.ok) {
+    const e = new Error(data?.message || `GITHUB_HTTP_${r.status}`);
+    e.status = r.status;
+    e.data = data;
+    throw e;
+  }
+  return data;
+}
+
 function randomToken(bytes=32) {
   const a = new Uint8Array(bytes);
   crypto.getRandomValues(a);
@@ -300,7 +366,7 @@ async function handleApi(request, env, url) {
     const me = await requireAdmin(request, env);
     return json({
       ok:true,
-      version:"1.10",
+      version:"1.11",
       reset_applied,
       needs_setup: count===0,
       authenticated: !!me,
@@ -325,13 +391,13 @@ async function handleApi(request, env, url) {
         "INSERT INTO admins(email,password_hash,password_salt,created_at) VALUES(?,?,?,?)"
       ).bind(email, hash, salt, t).run();
 
-      return json({ok:true,version:"1.10"});
+      return json({ok:true,version:"1.11"});
     } catch (e) {
       return json({
         ok:false,
         error:"BOOTSTRAP_FAILED",
         detail:String(e?.message || e),
-        version:"1.10"
+        version:"1.11"
       }, {status:500});
     }
   }
@@ -407,7 +473,7 @@ async function handleApi(request, env, url) {
   }
 
   if (url.pathname === "/api/admin/version" && request.method === "GET") {
-    return json({ok:true,version:"1.10",admin_setup_fix:true,d1_schema_fix:true});
+    return json({ok:true,version:"1.11",admin_setup_fix:true,d1_schema_fix:true});
   }
 
   // everything below requires admin
@@ -520,6 +586,100 @@ async function handleApi(request, env, url) {
     return json({ok:true});
   }
 
+
+
+  // ----- GitHub site editor -----
+  if (url.pathname === "/api/admin/github/status" && request.method === "GET") {
+    const c = githubConfig(env);
+    if (!c.token) {
+      return json({
+        ok:true,
+        configured:false,
+        owner:c.owner,repo:c.repo,branch:c.branch,
+        editable_files:[...GITHUB_EDITABLE_FILES]
+      });
+    }
+    try {
+      const repo = await githubApi(env, `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}`);
+      return json({
+        ok:true,configured:true,connected:true,
+        owner:c.owner,repo:c.repo,branch:c.branch,
+        repo_url:repo.html_url||"",
+        editable_files:[...GITHUB_EDITABLE_FILES]
+      });
+    } catch(e) {
+      return json({
+        ok:true,configured:true,connected:false,
+        owner:c.owner,repo:c.repo,branch:c.branch,
+        error:e.message
+      });
+    }
+  }
+
+  if (url.pathname === "/api/admin/github/file" && request.method === "GET") {
+    const c = githubConfig(env);
+    const path = clean(url.searchParams.get("path"), 180);
+    if (!GITHUB_EDITABLE_FILES.has(path)) return json({ok:false,error:"FILE_NOT_ALLOWED"},{status:400});
+    try {
+      const d = await githubApi(
+        env,
+        `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(c.branch)}`
+      );
+      if (Array.isArray(d) || d.type !== "file") return json({ok:false,error:"NOT_A_FILE"},{status:400});
+      return json({
+        ok:true,path,sha:d.sha,size:d.size,
+        content:base64ToUtf8(d.content||""),
+        html_url:d.html_url||""
+      });
+    } catch(e) {
+      return json({ok:false,error:"GITHUB_READ_FAILED",detail:e.message},{status:e.status||502});
+    }
+  }
+
+  if (url.pathname === "/api/admin/github/file" && request.method === "PUT") {
+    const c = githubConfig(env);
+    let x; try{x=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+    const path=clean(x.path,180);
+    const content=String(x.content??"");
+    const sha=clean(x.sha,100);
+    const message=clean(x.message,180)||`KBN admin: update ${path}`;
+    const confirmText=clean(x.confirm,50);
+
+    if(!GITHUB_EDITABLE_FILES.has(path))return json({ok:false,error:"FILE_NOT_ALLOWED"},{status:400});
+    if(confirmText!=="GITHUBへ反映")return json({ok:false,error:"CONFIRM_REQUIRED"},{status:400});
+    if(!sha)return json({ok:false,error:"SHA_REQUIRED"},{status:400});
+    if(content.length>900000)return json({ok:false,error:"FILE_TOO_LARGE"},{status:413});
+
+    try{
+      const result=await githubApi(
+        env,
+        `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/${encodeURIComponent(path)}`,
+        {
+          method:"PUT",
+          headers:{"content-type":"application/json"},
+          body:JSON.stringify({
+            message,
+            content:utf8ToBase64(content),
+            sha,
+            branch:c.branch
+          })
+        }
+      );
+
+      return json({
+        ok:true,path,
+        commit_sha:result.commit?.sha||"",
+        commit_url:result.commit?.html_url||"",
+        file_url:result.content?.html_url||"",
+        message:"GitHubへ反映しました。Cloudflareの自動デプロイが開始されます。"
+      });
+    }catch(e){
+      return json({
+        ok:false,error:"GITHUB_UPDATE_FAILED",detail:e.message,
+        github_status:e.status||null
+      },{status:e.status||502});
+    }
+  }
 
   // ----- Admin jobs -----
   if (url.pathname === "/api/admin/jobs" && request.method === "GET") {

@@ -21,6 +21,9 @@
     "enabled": true
   },
   "vars": {
-    "KIN_VERSION": "1.10"
+    "KIN_VERSION": "1.11",
+    "GITHUB_OWNER": "yuuji0628",
+    "GITHUB_REPO": "kumamoto-izakaya-navi",
+    "GITHUB_BRANCH": "main"
   }
 }
