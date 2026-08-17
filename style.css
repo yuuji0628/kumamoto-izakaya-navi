@@ -519,3 +519,53 @@ div[id]{
     height:72px;
   }
 }
+
+
+/* ============================================================
+   KUMAMOTO IZAKAYA NAVI ver1.02
+   Hero background text overlap fix
+   ============================================================ */
+
+.hero-art{
+  background:
+    radial-gradient(circle at 50% 38%, rgba(228,185,79,.09), transparent 32%),
+    linear-gradient(180deg, rgba(4,8,13,.04) 0%, rgba(4,8,13,.52) 65%, rgba(4,8,13,.92) 100%),
+    url("logo-emblem.jpg") center 38% / 44% auto no-repeat,
+    #050a10 !important;
+}
+
+.hero-art-copy{
+  padding-top:170px !important;
+  padding-bottom:24px !important;
+}
+
+.hero-art-copy span,
+.hero-art-copy b{
+  position:relative;
+  z-index:3;
+}
+
+@media(max-width:560px){
+  .hero-art{
+    min-height:250px !important;
+    background:
+      radial-gradient(circle at 50% 34%, rgba(228,185,79,.10), transparent 30%),
+      linear-gradient(180deg, rgba(4,8,13,.02) 0%, rgba(4,8,13,.50) 64%, rgba(4,8,13,.94) 100%),
+      url("logo-emblem.jpg") center 31% / 38% auto no-repeat,
+      #050a10 !important;
+  }
+
+  .hero-art-copy{
+    padding:162px 18px 19px !important;
+  }
+
+  .hero-art-copy span{
+    margin-bottom:6px !important;
+    font-size:8px !important;
+  }
+
+  .hero-art-copy b{
+    font-size:20px !important;
+    line-height:1.35 !important;
+  }
+}
