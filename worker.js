@@ -129,6 +129,12 @@ async function ensureSchema(env) {
         created_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS admin_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         admin_id INTEGER NOT NULL,
@@ -200,6 +206,24 @@ async function ensureSchema(env) {
     });
   }
   await schemaPromise;
+
+  // ver1.05: one-time administrator reset migration.
+  // This is not an exposed reset endpoint. It runs once per database,
+  // records completion in app_settings, and cannot be triggered again.
+  const resetKey = "admin_reset_ver105";
+  const done = await env.DB.prepare(
+    "SELECT value FROM app_settings WHERE key=? LIMIT 1"
+  ).bind(resetKey).first();
+
+  if (!done) {
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM admin_sessions"),
+      env.DB.prepare("DELETE FROM admins"),
+      env.DB.prepare(
+        "INSERT INTO app_settings(key,value,updated_at) VALUES(?,?,?)"
+      ).bind(resetKey, "done", nowIso())
+    ]);
+  }
 }
 
 async function adminCount(env) {
