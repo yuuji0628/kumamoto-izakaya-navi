@@ -22,7 +22,7 @@ button{width:100%;height:52px;border:0;border-radius:13px;background:linear-grad
     <button id="submit">ログイン</button>
   </form>
   <div id="msg" class="msg"></div>
-  <div class="sub" id="hint">管理者のみアクセスできます。</div><div class="sub" style="text-align:center;opacity:.55">ver1.09</div>
+  <div class="sub" id="hint">管理者のみアクセスできます。</div><div class="sub" style="text-align:center;opacity:.55">ver1.12</div>
   <a class="back" href="/">← サイトへ戻る</a>
 </div>
 <script>
@@ -30,7 +30,21 @@ let needsSetup=false;
 const msg=t=>document.getElementById("msg").textContent=t||"";
 async function status(){
   try{
-    const r=await fetch("/api/admin/status?v=106&t="+Date.now(),{cache:"no-store",headers:{"cache-control":"no-cache"}}),d=await r.json();
+    const savedToken=localStorage.getItem("kin_admin_token")||"";
+    const headers={"cache-control":"no-cache"};
+    if(savedToken)headers["authorization"]="Bearer "+savedToken;
+    const r=await fetch("/api/admin/status?v=112&t="+Date.now(),{cache:"no-store",headers}),d=await r.json();
+
+    // ログイン済みの端末ではログイン画面を自動スキップ
+    if(savedToken && d.authenticated){
+      location.replace("/admin");
+      return;
+    }
+    // 期限切れ・無効なトークンだけ削除
+    if(savedToken && !d.authenticated){
+      localStorage.removeItem("kin_admin_token");
+    }
+
     needsSetup=!!d.needs_setup;
     if(needsSetup){
       setupNotice.style.display="block";
