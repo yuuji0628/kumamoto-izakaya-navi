@@ -61,11 +61,17 @@ body{background:var(--bar-bg)}
 .admin-more-menu{position:relative}
 .admin-more-menu summary::-webkit-details-marker{display:none}
 .admin-more-menu-panel{
+  z-index:9999;
+  pointer-events:auto;
   position:absolute;right:0;top:50px;width:190px;padding:8px;
   border:1px solid #394553;border-radius:12px;background:#0d141c;
   box-shadow:0 20px 50px rgba(0,0,0,.45)
 }
 .admin-more-menu-panel button{
+  position:relative;
+  z-index:10000;
+  pointer-events:auto;
+  touch-action:manipulation;
   width:100%;min-height:42px;margin:3px 0;border:0;border-radius:9px;
   background:#151e28;color:#fff;text-align:left;padding:0 12px
 }
@@ -204,7 +210,7 @@ body{background:var(--bar-bg)}
   <div>
     <h1>管理画面</h1>
     <p>BAR NAVIと同じ配置・操作感で、居酒屋ナビを管理できます。</p>
-    <span class="kin-version-badge">KUMAMOTO IZAKAYA NAVI <b>ver1.13</b></span>
+    <span class="kin-version-badge">KUMAMOTO IZAKAYA NAVI <b>ver1.16</b></span>
   </div>
   <small id="status" class="meta">読込中...</small>
 </div>
@@ -374,13 +380,16 @@ body{background:var(--bar-bg)}
       <div class="upload-note">まだファイルが選択されていません。</div>
     </div>
 
+    
     <div class="upload-confirm">
-      誤操作防止のため、反映前に <b style="color:#e6bd55">GITHUBへ反映</b> と入力してください。
-      <input id="ghUploadConfirm" placeholder="GITHUBへ反映">
+      <b>反映前の確認</b><br>
+      <span style="color:#aeb6c0">下の確認ボタンを押すと、反映ボタンが有効になります。</span>
+      <button id="ghUploadApprove" class="mini" type="button" style="width:100%;margin-top:10px">このファイルで更新する</button>
     </div>
 
+
     <div class="upload-actions">
-      <button id="ghUploadStart" class="gold" type="button">選択したファイルを反映</button>
+      <button id="ghUploadStart" class="gold" type="button" disabled>選択したファイルを反映</button>
       <button id="ghUploadClear" class="mini" type="button">選択をクリア</button>
       <button id="ghReload" class="mini" type="button">接続確認</button>
     </div>
@@ -490,8 +499,22 @@ function switchAdminTab(name){
   document.querySelectorAll(".admin-more-menu").forEach(d=>d.open=false);
   window.scrollTo({top:0,behavior:"smooth"});
 }
-document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
-document.querySelectorAll("[data-go-tab]").forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.goTab));
+
+// ver1.16: iPhone/Safari stable menu routing
+document.addEventListener("click",e=>{
+  const tabBtn=e.target.closest("[data-tab]");
+  if(tabBtn){
+    e.preventDefault();
+    e.stopPropagation();
+    switchAdminTab(tabBtn.dataset.tab);
+    return;
+  }
+  const goBtn=e.target.closest("[data-go-tab]");
+  if(goBtn){
+    e.preventDefault();
+    switchAdminTab(goBtn.dataset.goTab);
+  }
+},true);
 opsReloadAllBtn.onclick=()=>loadAll();
 
 logout.onclick=async()=>{try{await api("/api/admin/logout",{method:"POST"})}catch{}localStorage.removeItem("kin_admin_token");location.href="/admin-login"}
@@ -547,20 +570,33 @@ function ghSetFiles(list){
   ghSelectedFiles=[...list];ghRenderUploadList();ghUploadResult.style.display="none"
 }
 ghUploadFiles.addEventListener("change",e=>ghSetFiles(e.target.files||[]));
+
+ghUploadFiles.addEventListener("change",()=>{
+  ghUploadStart.disabled=true;
+  ghUploadApprove.dataset.approved="";
+  ghUploadApprove.textContent="このファイルで更新する";
+});
+ghUploadApprove.onclick=()=>{
+  if(!ghSelectedFiles.length){toast("先に更新ファイルを選択してください");return}
+  ghUploadApprove.dataset.approved="1";
+  ghUploadApprove.textContent="✓ 確認しました";
+  ghUploadStart.disabled=false;
+};
+
 ghUploadClear.onclick=()=>{
-  ghSelectedFiles=[];ghUploadFiles.value="";ghUploadConfirm.value="";ghRenderUploadList()
+  ghSelectedFiles=[];ghUploadFiles.value="";ghRenderUploadList();ghUploadStart.disabled=true;ghUploadApprove.dataset.approved="";ghUploadApprove.textContent="このファイルで更新する"
 };
 ghFileDrop.addEventListener("dragover",e=>{e.preventDefault();ghFileDrop.classList.add("dragover")});
 ghFileDrop.addEventListener("dragleave",()=>ghFileDrop.classList.remove("dragover"));
 ghFileDrop.addEventListener("drop",e=>{
   e.preventDefault();ghFileDrop.classList.remove("dragover");
-  if(e.dataTransfer?.files?.length)ghSetFiles(e.dataTransfer.files)
+  if(e.dataTransfer?.files?.length){ghSetFiles(e.dataTransfer.files);ghUploadStart.disabled=true;ghUploadApprove.dataset.approved="";ghUploadApprove.textContent="このファイルで更新する"}
 });
 ghReload.onclick=()=>loadGithubStatus();
 
 ghUploadStart.onclick=async()=>{
   if(!ghSelectedFiles.length){toast("更新ファイルを選択してください");return}
-  if(ghUploadConfirm.value.trim()!=="GITHUBへ反映"){toast("確認文字を入力してください");return}
+  if(ghUploadApprove.dataset.approved!=="1"){toast("先に確認ボタンを押してください");return}
   if(!confirm(`${ghSelectedFiles.length}個のファイルをGitHubへ反映しますか？`))return;
 
   ghUploadStart.disabled=true;ghUploadStart.textContent="反映中...";
