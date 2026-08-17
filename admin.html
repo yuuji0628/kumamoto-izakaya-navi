@@ -40,6 +40,7 @@ button,input,select,textarea{font:inherit}.top{position:sticky;top:0;z-index:20;
 <button class="tab" data-tab="submissions">申込み</button>
 <button class="tab" data-tab="requests">店舗申請</button>
 <button class="tab" data-tab="leads">開拓</button>
+<button class="tab" data-tab="sitesettings">サイト設定</button>
 <button class="tab" data-tab="siteupdate">サイト更新</button>
 <button class="tab" data-tab="access">アクセス</button>
 </div>
@@ -90,6 +91,24 @@ button,input,select,textarea{font:inherit}.top{position:sticky;top:0;z-index:20;
 <div class="section-head"><h2>開拓候補</h2><button class="mini" onclick="loadAll()">更新</button></div><div id="leadList"></div>
 </section>
 
+
+
+<section id="panel-sitesettings" class="panel">
+<div class="notice">コードを触らずに公開トップページの主要文言を変更できます。保存内容はD1へ保存されます。</div>
+<div class="formcard">
+<div class="section-head"><h2>サイト設定</h2><button class="mini" id="reloadSiteSettings" type="button">再読込</button></div>
+<div class="formgrid">
+<div class="field full"><label>トップ見出し</label><input id="siteHeroTitle" placeholder="今夜行きたい居酒屋を、熊本で見つける。"></div>
+<div class="field full"><label>トップ説明文</label><textarea id="siteHeroSubtitle"></textarea></div>
+<div class="field"><label>お知らせタイトル</label><input id="siteNoticeTitle"></div>
+<div class="field full"><label>お知らせ本文</label><textarea id="siteNoticeText"></textarea></div>
+<div class="field"><label>店舗向けCTAタイトル</label><input id="siteCtaTitle"></div>
+<div class="field full"><label>店舗向けCTA本文</label><textarea id="siteCtaText"></textarea></div>
+</div>
+<button id="saveSiteSettings" class="gold" type="button">サイト設定を保存</button>
+<div id="siteSettingsMsg" class="meta" style="margin-top:9px"></div>
+</div>
+</section>
 
 <section id="panel-siteupdate" class="panel">
   <div class="notice">
@@ -214,4 +233,33 @@ loadGithubStatus();
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");$("panel-"+b.dataset.tab).classList.add("active")});
 logout.onclick=async()=>{try{await api("/api/admin/logout",{method:"POST"})}catch{}localStorage.removeItem("kin_admin_token");location.href="/admin-login"}
 loadAll();
+
+async function loadSiteSettings(){
+  try{
+    const d=await api("/api/admin/site-settings"),s=d.settings||{};
+    siteHeroTitle.value=s.hero_title||"";
+    siteHeroSubtitle.value=s.hero_subtitle||"";
+    siteNoticeTitle.value=s.notice_title||"";
+    siteNoticeText.value=s.notice_text||"";
+    siteCtaTitle.value=s.cta_title||"";
+    siteCtaText.value=s.cta_text||"";
+    siteSettingsMsg.textContent="最新設定を読み込みました";
+  }catch(e){siteSettingsMsg.textContent="読み込みに失敗しました"}
+}
+reloadSiteSettings.onclick=loadSiteSettings;
+saveSiteSettings.onclick=async()=>{
+  saveSiteSettings.disabled=true;saveSiteSettings.textContent="保存中...";
+  try{
+    await api("/api/admin/site-settings",{method:"PUT",body:JSON.stringify({
+      hero_title:siteHeroTitle.value,hero_subtitle:siteHeroSubtitle.value,
+      notice_title:siteNoticeTitle.value,notice_text:siteNoticeText.value,
+      cta_title:siteCtaTitle.value,cta_text:siteCtaText.value
+    })});
+    siteSettingsMsg.textContent="✅ 保存しました。公開サイトを再読み込みすると反映されます。";
+  }catch(e){siteSettingsMsg.textContent="保存失敗: "+e.message}
+  finally{saveSiteSettings.disabled=false;saveSiteSettings.textContent="サイト設定を保存"}
+};
+loadSiteSettings();
+
+
 </script></body></html>

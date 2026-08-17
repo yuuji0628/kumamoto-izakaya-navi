@@ -59,3 +59,27 @@ async function jobs(){
  box.innerHTML='<div class="empty">求人情報は現在準備中です。店舗掲載とあわせて求人掲載も受付予定です。</div>';
 }
 home();listShops();detail();jobs();setupForms();
+
+
+/* ===== No-code site settings ===== */
+async function applySiteSettings(){
+  try{
+    const r=await fetch("/api/site-settings",{cache:"no-store"});
+    const d=await r.json(); if(!d?.ok)return;
+    const s=d.settings||{};
+    const set=(sel,v)=>{if(!v)return;const el=document.querySelector(sel);if(el)el.textContent=v};
+    set("[data-site-setting='hero_title']",s.hero_title);
+    set("[data-site-setting='hero_subtitle']",s.hero_subtitle);
+    set("[data-site-setting='notice_title']",s.notice_title);
+    set("[data-site-setting='notice_text']",s.notice_text);
+    set("[data-site-setting='cta_title']",s.cta_title);
+    set("[data-site-setting='cta_text']",s.cta_text);
+    if(s.hero_title&&!document.querySelector("[data-site-setting='hero_title']")){
+      const h=document.querySelector(".hero h1, main h1");if(h)h.textContent=s.hero_title;
+    }
+    if(s.hero_subtitle&&!document.querySelector("[data-site-setting='hero_subtitle']")){
+      const p=document.querySelector(".hero p, .hero-copy p");if(p)p.textContent=s.hero_subtitle;
+    }
+  }catch(e){}
+}
+document.addEventListener("DOMContentLoaded",applySiteSettings);

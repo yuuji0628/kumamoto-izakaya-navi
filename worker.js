@@ -196,6 +196,12 @@ async function ensureSchema(env) {
         created_at TEXT NOT NULL
       )`,
 
+      `CREATE TABLE IF NOT EXISTS site_settings (
+        setting_key TEXT PRIMARY KEY,
+        setting_value TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL
+      )`,
+
       `CREATE TABLE IF NOT EXISTS app_settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
@@ -360,6 +366,15 @@ async function handleApi(request, env, url) {
   }
 
   // ----- Admin setup/auth -----
+
+  if (url.pathname === "/api/site-settings" && request.method === "GET") {
+    await ensureSchema(env);
+    const {results=[]}=await env.DB.prepare("SELECT setting_key,setting_value FROM site_settings").all();
+    const settings={};
+    for(const row of results) settings[row.setting_key]=row.setting_value;
+    return json({ok:true,settings});
+  }
+
   if (url.pathname === "/api/admin/status" && request.method === "GET") {
     const reset_applied = await forceSetupOnceVer106(env);
     const count = await adminCount(env);
@@ -587,6 +602,31 @@ async function handleApi(request, env, url) {
   }
 
 
+
+
+  if (url.pathname === "/api/admin/site-settings" && request.method === "GET") {
+    const {results=[]}=await env.DB.prepare("SELECT setting_key,setting_value FROM site_settings").all();
+    const settings={};
+    for(const row of results) settings[row.setting_key]=row.setting_value;
+    return json({ok:true,settings});
+  }
+
+  if (url.pathname === "/api/admin/site-settings" && request.method === "PUT") {
+    let x;try{x=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+    const allowed=["hero_title","hero_subtitle","notice_title","notice_text","cta_title","cta_text"];
+    const t=nowIso();
+    const stmts=[];
+    for(const key of allowed){
+      if(Object.prototype.hasOwnProperty.call(x,key)){
+        stmts.push(env.DB.prepare(`
+          INSERT INTO site_settings(setting_key,setting_value,updated_at) VALUES(?,?,?)
+          ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=excluded.updated_at
+        `).bind(key,String(x[key]??"").slice(0,3000),t));
+      }
+    }
+    if(stmts.length)await env.DB.batch(stmts);
+    return json({ok:true});
+  }
 
   // ----- GitHub site editor -----
   if (url.pathname === "/api/admin/github/status" && request.method === "GET") {
