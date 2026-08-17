@@ -29,21 +29,254 @@ button,input,select,textarea{font:inherit}.top{position:sticky;top:0;z-index:20;
 .github-status{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:10px}.dot{width:8px;height:8px;border-radius:50%;background:#6d7780}.dot.ok{background:#60c281}.dot.ng{background:#d36c6c}
 
 @media(max-width:650px){.site-update-layout{grid-template-columns:1fr}.site-file-list{grid-template-columns:repeat(2,1fr)}.codebox{min-height:420px}.commitbar{grid-template-columns:1fr}.commitbar button{width:100%}.stats{grid-template-columns:1fr 1fr}.formgrid{grid-template-columns:1fr}.field.full{grid-column:auto}.searchbar{grid-template-columns:1fr 1fr}.searchbar button{grid-column:1/-1}.hero h1{font-size:24px}.brand b{font-size:15px}}
-</style></head><body>
+</style>
+<style>
+/* ver1.13 — BAR NAVI aligned admin UI */
+:root{--bar-gold:#e6bd55;--bar-bg:#080d13;--bar-panel:#0f161f;--bar-line:#303a46}
+body{background:var(--bar-bg)}
+.wrap{max-width:1180px}
+.hero{padding:6px 0 2px;align-items:flex-start}
+.hero h1{font-size:1.55rem}
+.hero p{font-size:.78rem;line-height:1.6}
+.kin-version-badge{
+  display:inline-flex;align-items:center;gap:7px;
+  margin-top:8px;padding:7px 10px;border:1px solid #34404c;border-radius:999px;
+  background:#0d141c;color:#aeb6c0;font-size:.7rem;font-weight:800
+}
+.kin-version-badge b{color:var(--bar-gold)}
+.stats{display:none!important}
+
+.admin-tabs-v108{
+  position:sticky;top:66px;z-index:40;
+  display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;
+  padding:8px;margin:12px -4px 14px;
+  border:1px solid #2c3540;border-radius:14px;
+  background:rgba(8,13,19,.94);backdrop-filter:blur(14px)
+}
+.admin-tabs-v108>button,.admin-tabs-v108>details>summary{
+  min-height:44px;border:0;border-radius:10px;background:#111821;color:#c7ced7;
+  font-weight:800;display:flex;align-items:center;justify-content:center;list-style:none;cursor:pointer
+}
+.admin-tabs-v108>button.active{background:var(--bar-gold);color:#111}
+.admin-more-menu{position:relative}
+.admin-more-menu summary::-webkit-details-marker{display:none}
+.admin-more-menu-panel{
+  position:absolute;right:0;top:50px;width:190px;padding:8px;
+  border:1px solid #394553;border-radius:12px;background:#0d141c;
+  box-shadow:0 20px 50px rgba(0,0,0,.45)
+}
+.admin-more-menu-panel button{
+  width:100%;min-height:42px;margin:3px 0;border:0;border-radius:9px;
+  background:#151e28;color:#fff;text-align:left;padding:0 12px
+}
+
+.tab-notify-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:20px;height:20px;padding:0 6px;margin-left:5px;border-radius:999px;
+  background:#d84242;color:#fff;font-size:.68rem;font-weight:900
+}
+.tab-notify-badge[hidden]{display:none!important}
+
+.ops-status-strip{
+  display:grid;grid-template-columns:repeat(3,1fr) auto;gap:8px;align-items:stretch;margin:12px 0 18px
+}
+.ops-status-strip>div{padding:10px 12px;border:1px solid #35404c;border-radius:12px;background:#0c131a}
+.ops-status-strip span{display:block;color:#9099a5;font-size:.68rem}
+.ops-status-strip strong{display:block;margin-top:2px;color:var(--bar-gold);font-size:1.2rem}
+#opsReloadAllBtn{
+  border:1px solid #4a5561;border-radius:12px;background:#111922;color:#e8ebef;padding:0 14px;font-weight:800
+}
+
+.admin-dashboard-v108{
+  padding:18px;margin:0 0 16px;border:1px solid #303a46;border-radius:20px;
+  background:linear-gradient(180deg,#101821,#0c1219)
+}
+.dashboard-head h2{margin:.25rem 0 .35rem;font-size:1.55rem}
+.dashboard-head p{margin:0;color:#9fa7b2;line-height:1.6}
+.dashboard-primary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
+.dashboard-primary-card{
+  min-height:108px;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;
+  padding:16px;border:1px solid #384452;border-radius:16px;background:#111922;color:#fff;text-align:left
+}
+.dashboard-primary-card:first-child{border-color:#725d27;background:linear-gradient(180deg,rgba(232,191,86,.11),#111922)}
+.dashboard-icon{font-size:1.7rem}.dashboard-copy b{display:block;font-size:1rem;margin-bottom:6px}
+.dashboard-copy small{color:#9fa8b3}.dashboard-copy strong{color:var(--bar-gold)}
+.dashboard-arrow{font-size:2rem;color:#7d8792}
+.dashboard-more{margin-top:14px;border-top:1px solid #28323d;padding-top:12px}
+.dashboard-more summary{color:#c9d0d8;font-weight:800;cursor:pointer}
+.dashboard-more-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}
+.dashboard-more-grid button{min-height:44px;border:1px solid #36414d;border-radius:10px;background:#111922;color:#fff}
+.dashboard-status-line{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.dashboard-status-line span{padding:7px 10px;border-radius:999px;background:#0b1118;color:#aeb6c0;font-size:.76rem}
+.dashboard-status-line b{color:var(--bar-gold)}
+
+.panel{padding-top:4px}
+.formcard,.card,.access-card{border-radius:16px}
+.section-head h2{font-size:1.15rem}
+.gold{background:var(--bar-gold)}
+.card{background:#0a1118;border-color:#35404c}
+.card .actions{margin-top:12px}
+.card .actions .mini:first-child{border-color:#7a6228;color:#f1c75b}
+.notice{border-radius:12px}
+.site-update-layout{gap:14px}
+.codebox{border-radius:14px}
+
+@media(max-width:760px){
+  .topin{padding:9px 10px}.brand img{width:38px;height:38px}.brand b{font-size:14px}
+  .wrap{padding-left:10px;padding-right:10px}
+  .admin-tabs-v108{top:58px;grid-template-columns:1fr 1fr 1fr auto;gap:4px;border-radius:12px}
+  .admin-tabs-v108>button,.admin-tabs-v108>details>summary{min-height:42px;font-size:.78rem;padding:0 8px}
+  .admin-dashboard-v108{padding:14px}
+  .dashboard-primary-grid{grid-template-columns:1fr}
+  .dashboard-primary-card{min-height:78px;padding:13px}
+  .dashboard-icon{font-size:1.45rem}
+  .dashboard-more-grid{grid-template-columns:1fr}
+  .ops-status-strip{grid-template-columns:1fr 1fr}
+  #opsReloadAllBtn{min-height:44px}
+}
+</style>
+
+
+<style>
+/* File upload site updater */
+.file-upload-updater{
+  display:grid;gap:14px
+}
+.file-drop{
+  position:relative;
+  padding:28px 18px;
+  border:2px dashed #4a5663;
+  border-radius:16px;
+  background:#0a1118;
+  text-align:center;
+  transition:.2s ease
+}
+.file-drop.dragover{
+  border-color:#e6bd55;
+  background:rgba(230,189,85,.06)
+}
+.file-drop input[type=file]{
+  position:absolute;inset:0;width:100%;height:100%;
+  opacity:0;cursor:pointer
+}
+.file-drop strong{display:block;color:#f1c75b;font-size:1rem;margin-bottom:6px}
+.file-drop span{display:block;color:#9fa8b3;font-size:.78rem;line-height:1.6}
+.upload-file-list{display:grid;gap:8px}
+.upload-file-item{
+  display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;
+  padding:11px 12px;border:1px solid #35404c;border-radius:12px;background:#0b1219
+}
+.upload-file-item b{display:block;color:#fff;font-size:.86rem}
+.upload-file-item small{display:block;color:#8f99a4;margin-top:3px}
+.upload-status{
+  min-width:90px;text-align:right;font-size:.74rem;font-weight:800;color:#9aa4ae
+}
+.upload-status.ok{color:#7ed49a}.upload-status.ng{color:#ff9e9e}.upload-status.work{color:#f1c75b}
+.upload-actions{display:flex;gap:8px;flex-wrap:wrap}
+.upload-actions button{min-height:44px}
+.upload-confirm{
+  padding:12px;border:1px solid #655324;border-radius:12px;background:rgba(230,189,85,.04)
+}
+.upload-confirm input{
+  width:100%;margin-top:7px;padding:11px;border:1px solid #51451f;border-radius:10px;
+  background:#080e14;color:#fff
+}
+.upload-result{
+  display:none;padding:12px;border:1px solid #365544;border-radius:12px;
+  background:rgba(80,150,100,.05);color:#90d9aa;font-size:.78rem;line-height:1.65
+}
+.upload-note{
+  padding:11px 12px;border:1px solid #35404c;border-radius:12px;background:#0b1219;
+  color:#aeb6c0;font-size:.76rem;line-height:1.65
+}
+@media(max-width:650px){
+  .upload-file-item{grid-template-columns:1fr}
+  .upload-status{text-align:left}
+  .upload-actions{display:grid;grid-template-columns:1fr}
+}
+</style>
+
+</head><body>
 <header class="top"><div class="topin"><div class="brand"><img src="logo-emblem.jpg"><div><b>熊本居酒屋ナビ 管理</b><small>KUMAMOTO IZAKAYA NAVI</small></div></div><div class="top-actions"><a class="ghost" href="/" target="_blank">サイト</a><button id="logout" class="ghost">ログアウト</button></div></div></header>
 <main class="wrap">
-<div class="hero"><div><h1>管理画面</h1><p>熊本BAR NAVIと同じ操作感で管理できます。</p></div><small id="status" class="meta">読込中...</small></div>
-<div class="stats"><div class="stat"><b id="stShop">0</b><small>店舗</small></div><div class="stat"><b id="stPub">0</b><small>公開中</small></div><div class="stat"><b id="stJob">0</b><small>求人</small></div><div class="stat"><b id="stLead">0</b><small>開拓候補</small></div></div>
-<div class="tabs">
-<button class="tab active" data-tab="shops">店舗</button>
-<button class="tab" data-tab="jobs">求人</button>
-<button class="tab" data-tab="submissions">申込み</button>
-<button class="tab" data-tab="requests">店舗申請</button>
-<button class="tab" data-tab="leads">開拓</button>
-<button class="tab" data-tab="sitesettings">サイト設定</button>
-<button class="tab" data-tab="siteupdate">サイト更新</button>
-<button class="tab" data-tab="access">アクセス</button>
+
+<div class="hero">
+  <div>
+    <h1>管理画面</h1>
+    <p>BAR NAVIと同じ配置・操作感で、居酒屋ナビを管理できます。</p>
+    <span class="kin-version-badge">KUMAMOTO IZAKAYA NAVI <b>ver1.13</b></span>
+  </div>
+  <small id="status" class="meta">読込中...</small>
 </div>
+
+<nav class="admin-tabs-v108">
+  <button type="button" data-tab="shops" class="active">店舗</button>
+  <button type="button" data-tab="leads">開拓</button>
+  <button type="button" data-tab="submissions">申込み <span id="subTabBadge" class="tab-notify-badge" hidden>0</span></button>
+  <details class="admin-more-menu">
+    <summary>その他</summary>
+    <div class="admin-more-menu-panel">
+      <button type="button" data-tab="jobs">求人</button>
+      <button type="button" data-tab="requests">店舗申請 <span id="reqTabBadge" class="tab-notify-badge" hidden>0</span></button>
+      <button type="button" data-tab="access">アクセス</button>
+      <button type="button" data-tab="sitesettings">サイト設定</button>
+      <button type="button" data-tab="siteupdate">サイト更新</button>
+    </div>
+  </details>
+</nav>
+
+<div class="ops-status-strip">
+  <div><span>登録店舗</span><strong id="opsShopCount">-</strong></div>
+  <div><span>未対応申込み</span><strong id="opsSubCount">-</strong></div>
+  <div><span>開拓候補</span><strong id="opsLeadCount">-</strong></div>
+  <button type="button" id="opsReloadAllBtn">すべて更新</button>
+</div>
+
+<section class="admin-dashboard-v108" id="adminDashboard">
+  <div class="dashboard-head">
+    <div>
+      <p class="meta" style="color:#e6bd55;font-weight:900;letter-spacing:.08em">DASHBOARD</p>
+      <h2>今日はここから</h2>
+      <p>よく使う操作を大きく表示しています。</p>
+    </div>
+  </div>
+
+  <div class="dashboard-primary-grid">
+    <button type="button" class="dashboard-primary-card" data-go-tab="shops">
+      <span class="dashboard-icon">🏮</span>
+      <span class="dashboard-copy"><b>店舗を管理</b><small><strong id="dashShopCount">-</strong> 店舗</small></span>
+      <span class="dashboard-arrow">›</span>
+    </button>
+    <button type="button" class="dashboard-primary-card" data-go-tab="leads">
+      <span class="dashboard-icon">🔎</span>
+      <span class="dashboard-copy"><b>新しい居酒屋を開拓</b><small>自動検索・手動登録</small></span>
+      <span class="dashboard-arrow">›</span>
+    </button>
+    <button type="button" class="dashboard-primary-card" data-go-tab="submissions">
+      <span class="dashboard-icon">📥</span>
+      <span class="dashboard-copy"><b>申込み・申請を確認</b><small>未対応 <strong id="dashSubCount">-</strong> 件</small></span>
+      <span class="dashboard-arrow">›</span>
+    </button>
+  </div>
+
+  <details class="dashboard-more">
+    <summary>その他の管理メニュー</summary>
+    <div class="dashboard-more-grid">
+      <button type="button" data-go-tab="jobs">求人を管理</button>
+      <button type="button" data-go-tab="requests">店舗申請を確認</button>
+      <button type="button" data-go-tab="sitesettings">サイト設定</button>
+      <button type="button" data-go-tab="siteupdate">サイト更新</button>
+      <button type="button" data-go-tab="access">アクセスを見る</button>
+    </div>
+  </details>
+
+  <div class="dashboard-status-line">
+    <span>公開中 <b id="dashPubCount">-</b></span>
+    <span>求人 <b id="dashJobCount">-</b></span>
+    <span>新規開拓 <b id="dashLeadCount">-</b></span>
+  </div>
+</section>
+
 
 <section id="panel-shops" class="panel active">
 <div class="formcard">
@@ -110,33 +343,52 @@ button,input,select,textarea{font:inherit}.top{position:sticky;top:0;z-index:20;
 </div>
 </section>
 
+
 <section id="panel-siteupdate" class="panel">
   <div class="notice">
-    GitHubのサイト本体ファイルを管理画面から直接編集します。保存するとGitHubへコミットされ、Cloudflareの自動デプロイが始まります。<br>
-    <b>店舗情報の更新には使わず、HTML/CSS/JSなどサイト本体の変更専用です。</b>
+    コードを書かず、完成した更新ファイルを選択してGitHubへ反映します。複数ファイルの一括更新にも対応しています。
   </div>
-  <div class="github-status"><span id="ghDot" class="dot"></span><b id="ghStatusText">GitHub接続確認中...</b><span id="ghRepo" class="meta"></span></div>
+
+  <div class="github-status">
+    <span id="ghDot" class="dot"></span>
+    <b id="ghStatusText">GitHub接続確認中...</b>
+    <span id="ghRepo" class="meta"></span>
+  </div>
   <div id="ghSetupHelp" class="notice" style="display:none">
-    Cloudflare WorkerのSecretに <b>GITHUB_TOKEN</b> を1回だけ登録してください。トークンは管理画面やHTMLには表示されません。
+    Cloudflare WorkerのSecretに <b>GITHUB_TOKEN</b> を登録してください。
   </div>
-  <div class="site-update-layout">
-    <div>
-      <div class="section-head"><h2>ファイル</h2><button class="mini" id="ghReload">再読込</button></div>
-      <div id="ghFiles" class="site-file-list"></div>
+
+  <div class="file-upload-updater">
+    <div class="upload-note">
+      <b>使い方：</b>こちらで作成した更新用ファイルを選ぶだけです。<br>
+      同名のGitHubファイルを自動で取得して上書きします。
     </div>
-    <div class="formcard" style="margin:0">
-      <div class="section-head"><h2 id="ghFileTitle">ファイルを選択</h2><span id="ghFileMeta" class="meta"></span></div>
-      <textarea id="ghEditor" class="codebox" spellcheck="false" placeholder="左から編集するファイルを選択してください"></textarea>
-      <div class="commitbar"><input id="ghMessage" placeholder="コミットメッセージ（例: 管理画面からトップページ修正）"><button id="ghCommit" class="gold" type="button">GitHubへ反映</button></div>
-      <div class="confirm-box">
-        <div class="meta">誤操作防止のため、反映前に下の欄へ <b style="color:#e8ba48">GITHUBへ反映</b> と入力してください。</div>
-        <input id="ghConfirm" placeholder="GITHUBへ反映">
-        <div class="meta">※ 保存後はGitHubの履歴に残ります。Cloudflareが自動デプロイします。</div>
-      </div>
-      <div id="ghResult" class="deploy-result"></div>
+
+    <div id="ghFileDrop" class="file-drop">
+      <input id="ghUploadFiles" type="file" multiple>
+      <strong>更新ファイルを選択</strong>
+      <span>タップしてファイルを選ぶ / PCではドラッグ＆ドロップも可能</span>
     </div>
+
+    <div id="ghUploadList" class="upload-file-list">
+      <div class="upload-note">まだファイルが選択されていません。</div>
+    </div>
+
+    <div class="upload-confirm">
+      誤操作防止のため、反映前に <b style="color:#e6bd55">GITHUBへ反映</b> と入力してください。
+      <input id="ghUploadConfirm" placeholder="GITHUBへ反映">
+    </div>
+
+    <div class="upload-actions">
+      <button id="ghUploadStart" class="gold" type="button">選択したファイルを反映</button>
+      <button id="ghUploadClear" class="mini" type="button">選択をクリア</button>
+      <button id="ghReload" class="mini" type="button">接続確認</button>
+    </div>
+
+    <div id="ghUploadResult" class="upload-result"></div>
   </div>
 </section>
+
 
 <section id="panel-access" class="panel"><div class="section-head"><h2>アクセス / 運営状況</h2></div><div id="accessGrid" class="access-grid"></div></section>
 </main>
@@ -149,7 +401,20 @@ const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g
 function toast(t){$("toast").textContent=t;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),1800)}
 async function api(path,opt={}){const r=await fetch(path,{...opt,headers:{...H,...(opt.headers||{})},cache:"no-store"});const d=await r.json().catch(()=>({}));if(r.status===401){localStorage.removeItem("kin_admin_token");location.href="/admin-login";throw 0}if(!r.ok||!d.ok)throw new Error(d.error||d.message||"API_ERROR");return d}
 async function loadAll(){status.textContent="更新中...";try{const [a,b,c,d,e]=await Promise.all([api("/api/admin/shops"),api("/api/admin/jobs"),api("/api/admin/submissions"),api("/api/admin/leads"),api("/api/admin/access-summary")]);shops=a.shops||[];jobs=b.jobs||[];subs=c.submissions||[];leads=d.leads||[];renderAll(e.summary||{});status.textContent="最新";}catch(err){status.textContent="読込エラー";console.error(err)}}
-function renderAll(sum){stShop.textContent=sum.shops??shops.length;stPub.textContent=sum.published??shops.filter(x=>x.is_published).length;stJob.textContent=sum.jobs??jobs.filter(x=>x.is_published).length;stLead.textContent=sum.new_leads??leads.filter(x=>x.status==="new").length;renderShops();renderJobs();renderSubs();renderRequests();renderLeads();renderAccess(sum);jobShop.innerHTML='<option value="">店舗未指定</option>'+shops.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("")}
+function renderAll(sum){
+  const shopCount=sum.shops??shops.length;
+  const pubCount=sum.published??shops.filter(x=>x.is_published).length;
+  const jobCount=sum.jobs??jobs.filter(x=>x.is_published).length;
+  const leadCount=sum.new_leads??leads.filter(x=>x.status==="new").length;
+  const pendingCount=subs.filter(x=>x.status==="pending").length;
+  stShop.textContent=shopCount;stPub.textContent=pubCount;stJob.textContent=jobCount;stLead.textContent=leadCount;
+  opsShopCount.textContent=shopCount;opsSubCount.textContent=pendingCount;opsLeadCount.textContent=leadCount;
+  dashShopCount.textContent=shopCount;dashPubCount.textContent=pubCount;dashJobCount.textContent=jobCount;dashLeadCount.textContent=leadCount;dashSubCount.textContent=pendingCount;
+  subTabBadge.textContent=pendingCount;subTabBadge.hidden=pendingCount===0;
+  reqTabBadge.textContent=pendingCount;reqTabBadge.hidden=pendingCount===0;
+  renderShops();renderJobs();renderSubs();renderRequests();renderLeads();renderAccess(sum);
+  jobShop.innerHTML='<option value="">店舗未指定</option>'+shops.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("")
+}
 function renderShops(){shopList.innerHTML=shops.length?shops.map(s=>`<div class="card"><div class="row"><div><h3>${esc(s.name)}</h3><div class="meta">${esc(s.area||"未設定")} / ${esc(s.genre||"居酒屋")}</div></div><span class="badge ${s.is_published?"pub":"draft"}">${s.is_published?"公開":"非公開"}</span></div><div class="desc">${esc(s.description||"紹介文未設定")}</div><div class="badges">${s.is_published?'<span class="badge pub">公開</span>':''}<span class="badge">${esc(s.slug)}</span></div><div class="actions"><button class="mini" onclick="editShop(${s.id})">編集</button><a class="mini" target="_blank" href="/shop.html?slug=${encodeURIComponent(s.slug)}">確認</a><button class="mini danger" onclick="deleteShop(${s.id})">完全削除</button></div></div>`).join(""):'<div class="empty">店舗はまだありません。</div>'}
 function renderJobs(){jobList.innerHTML=jobs.length?jobs.map(j=>`<div class="card"><div class="row"><div><h3>${esc(j.title)}</h3><div class="meta">${esc(j.shop_name||"店舗未指定")} / ${esc(j.employment_type||"")}</div></div><span class="badge ${j.is_published?"pub":"draft"}">${j.is_published?"公開":"非公開"}</span></div><div class="desc">${esc(j.salary||"")}<br>${esc(j.description||"")}</div><div class="actions"><button class="mini" onclick="editJob(${j.id})">編集</button><button class="mini danger" onclick="deleteJob(${j.id})">削除</button></div></div>`).join(""):'<div class="empty">求人はまだありません。</div>'}
 function subCard(s,buttons){return `<div class="card"><div class="row"><div><h3>${esc(s.shop_name)}</h3><div class="meta">${esc(s.area||"")} / ${esc(s.genre||"")}</div></div><span class="badge ${s.status==="pending"?"draft":s.status==="approved"?"pub":""}">${s.status==="pending"?"未対応":s.status==="approved"?"承認済み":"見送り"}</span></div><div class="desc">${esc(s.description||"")}<br>${esc(s.email||"")} ${esc(s.phone||"")}</div>${buttons||""}</div>`}
@@ -194,20 +459,7 @@ async function loadGithubStatus(){
     ghDot.className="dot ng";ghStatusText.textContent="GitHub接続確認に失敗";ghSetupHelp.style.display="block";
   }
 }
-async function loadGithubFile(path){
-  if(!path)return;
-  ghEditor.value="読み込み中...";ghFileTitle.textContent=path;ghFileMeta.textContent="";
-  try{
-    const d=await api("/api/admin/github/file?path="+encodeURIComponent(path));
-    ghCurrent={path:d.path,sha:d.sha};ghEditor.value=d.content||"";ghFileMeta.textContent=`${d.size||0} bytes`;
-    ghMessage.value=`admin: update ${path}`;
-    ghConfirm.value="";
-    document.querySelectorAll("[data-gh-file]").forEach(b=>b.classList.toggle("active",b.dataset.ghFile===path));
-  }catch(e){ghEditor.value="";toast("読込失敗: "+e.message)}
-}
-ghReload.onclick=()=>loadGithubStatus();
-ghCommit.onclick=async()=>{
-  if(!ghCurrent.path||!ghCurrent.sha)return toast("ファイルを選択してください");
+
   if(ghConfirm.value.trim()!=="GITHUBへ反映")return toast("確認文字を入力してください");
   if(!confirm(`${ghCurrent.path} をGitHubへ反映しますか？`))return;
   ghCommit.disabled=true;ghCommit.textContent="反映中...";
@@ -230,7 +482,18 @@ ghCommit.onclick=async()=>{
 }
 loadGithubStatus();
 
-document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");$("panel-"+b.dataset.tab).classList.add("active")});
+
+function switchAdminTab(name){
+  document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("active",x.dataset.tab===name));
+  document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));
+  const panel=$("panel-"+name); if(panel) panel.classList.add("active");
+  document.querySelectorAll(".admin-more-menu").forEach(d=>d.open=false);
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
+document.querySelectorAll("[data-go-tab]").forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.goTab));
+opsReloadAllBtn.onclick=()=>loadAll();
+
 logout.onclick=async()=>{try{await api("/api/admin/logout",{method:"POST"})}catch{}localStorage.removeItem("kin_admin_token");location.href="/admin-login"}
 loadAll();
 
@@ -261,5 +524,78 @@ saveSiteSettings.onclick=async()=>{
 };
 loadSiteSettings();
 
+
+
+let ghSelectedFiles=[];
+function ghFormatBytes(n){
+  const v=Number(n||0);
+  if(v<1024)return v+" B";
+  if(v<1024*1024)return (v/1024).toFixed(1)+" KB";
+  return (v/1024/1024).toFixed(1)+" MB";
+}
+function ghRenderUploadList(){
+  if(!ghSelectedFiles.length){
+    ghUploadList.innerHTML='<div class="upload-note">まだファイルが選択されていません。</div>';return
+  }
+  ghUploadList.innerHTML=ghSelectedFiles.map((f,i)=>`
+    <div class="upload-file-item">
+      <div><b>${esc(f.name)}</b><small>${ghFormatBytes(f.size)}</small></div>
+      <div class="upload-status" id="ghUploadStatus-${i}">待機中</div>
+    </div>`).join("");
+}
+function ghSetFiles(list){
+  ghSelectedFiles=[...list];ghRenderUploadList();ghUploadResult.style.display="none"
+}
+ghUploadFiles.addEventListener("change",e=>ghSetFiles(e.target.files||[]));
+ghUploadClear.onclick=()=>{
+  ghSelectedFiles=[];ghUploadFiles.value="";ghUploadConfirm.value="";ghRenderUploadList()
+};
+ghFileDrop.addEventListener("dragover",e=>{e.preventDefault();ghFileDrop.classList.add("dragover")});
+ghFileDrop.addEventListener("dragleave",()=>ghFileDrop.classList.remove("dragover"));
+ghFileDrop.addEventListener("drop",e=>{
+  e.preventDefault();ghFileDrop.classList.remove("dragover");
+  if(e.dataTransfer?.files?.length)ghSetFiles(e.dataTransfer.files)
+});
+ghReload.onclick=()=>loadGithubStatus();
+
+ghUploadStart.onclick=async()=>{
+  if(!ghSelectedFiles.length){toast("更新ファイルを選択してください");return}
+  if(ghUploadConfirm.value.trim()!=="GITHUBへ反映"){toast("確認文字を入力してください");return}
+  if(!confirm(`${ghSelectedFiles.length}個のファイルをGitHubへ反映しますか？`))return;
+
+  ghUploadStart.disabled=true;ghUploadStart.textContent="反映中...";
+  ghUploadResult.style.display="none";
+  let ok=0,ng=0;const details=[];
+  try{
+    for(let i=0;i<ghSelectedFiles.length;i++){
+      const f=ghSelectedFiles[i],st=$("ghUploadStatus-"+i);
+      st.textContent="確認中...";st.className="upload-status work";
+      try{
+        const current=await api("/api/admin/github/file?path="+encodeURIComponent(f.name));
+        st.textContent="読込中...";
+        const content=await f.text();
+        st.textContent="反映中...";
+        await api("/api/admin/github/file",{
+          method:"PUT",
+          body:JSON.stringify({
+            path:f.name,sha:current.sha,content,
+            message:`admin upload: update ${f.name}`,
+            confirm:"GITHUBへ反映"
+          })
+        });
+        st.textContent="反映完了";st.className="upload-status ok";ok++;
+        details.push(`✅ ${f.name}`);
+      }catch(e){
+        st.textContent="失敗";st.className="upload-status ng";ng++;
+        details.push(`❌ ${f.name}: ${e.message}`);
+      }
+    }
+    ghUploadResult.style.display="block";
+    ghUploadResult.innerHTML=`反映完了：${ok}件 / 失敗：${ng}件<br>${details.map(esc).join("<br>")}<br><br>Cloudflareの自動デプロイが開始されます。`;
+    toast("ファイル更新が完了しました");
+  }finally{
+    ghUploadStart.disabled=false;ghUploadStart.textContent="選択したファイルを反映"
+  }
+};
 
 </script></body></html>
