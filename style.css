@@ -81,3 +81,441 @@ url("logo-official.jpg") center/cover no-repeat;box-shadow:0 30px 80px rgba(0,0,
  .bottom-nav{position:fixed;display:grid;grid-template-columns:repeat(4,1fr);left:0;right:0;bottom:0;z-index:60;background:rgba(5,10,16,.97);border-top:1px solid #293541;padding-bottom:env(safe-area-inset-bottom)}
  .bottom-nav a{height:68px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8f9aa5;font-size:10px;font-weight:800;gap:3px}.bottom-nav a span{font-size:20px}.bottom-nav a.active{color:var(--gold)}
 }
+
+
+/* ============================================================
+   KUMAMOTO IZAKAYA NAVI ver1.01
+   Mobile polish / spacing / overlap / card refinement
+   ============================================================ */
+
+main{
+  padding-bottom:24px;
+}
+
+.hero-art{
+  position:relative;
+  display:flex;
+  align-items:flex-end;
+  justify-content:flex-start;
+  overflow:hidden;
+}
+
+.hero-art::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:
+    linear-gradient(180deg,rgba(3,7,12,.08) 35%,rgba(3,7,12,.78) 100%),
+    linear-gradient(90deg,rgba(3,7,12,.16),transparent 55%);
+  pointer-events:none;
+}
+
+.hero-art::after{
+  display:none !important;
+  content:none !important;
+}
+
+.hero-art-copy{
+  position:relative;
+  z-index:2;
+  width:100%;
+  padding:24px 26px 22px;
+}
+
+.hero-art-copy span{
+  display:block;
+  margin-bottom:5px;
+  color:var(--gold);
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.18em;
+}
+
+.hero-art-copy b{
+  display:block;
+  color:#fff;
+  font-family:"Yu Mincho","Hiragino Mincho ProN",serif;
+  font-size:23px;
+  line-height:1.35;
+  text-shadow:0 3px 16px rgba(0,0,0,.85);
+}
+
+.category-grid{
+  align-items:stretch;
+}
+
+.category-card{
+  display:flex;
+  flex-direction:column;
+  justify-content:flex-start;
+  min-height:118px;
+  padding:20px;
+  transition:transform .16s ease,border-color .16s ease,background .16s ease;
+}
+
+.category-card:active{
+  transform:scale(.99);
+  border-color:#6a5528;
+  background:linear-gradient(180deg,#121d29,#0c151e);
+}
+
+.category-card .category-icon{
+  min-height:32px;
+  margin-bottom:10px;
+  line-height:1;
+}
+
+.category-card b{
+  margin-top:auto;
+}
+
+.category-card small{
+  display:block;
+  margin-top:5px;
+  color:#8995a1;
+  line-height:1.45;
+}
+
+.shop-card{
+  box-shadow:0 14px 34px rgba(0,0,0,.14);
+}
+
+.shop-photo{
+  height:158px;
+}
+
+.shop-body{
+  padding:18px;
+}
+
+.shop-name{
+  line-height:1.45;
+}
+
+.shop-desc{
+  min-height:35px;
+  -webkit-line-clamp:2;
+}
+
+.news-item{
+  grid-template-columns:58px minmax(0,1fr) 16px;
+  min-height:94px;
+  padding:17px 16px;
+}
+
+.news-item time{
+  font-size:13px;
+}
+
+.news-item b{
+  display:block;
+  line-height:1.5;
+}
+
+.news-item small{
+  margin-top:4px;
+  line-height:1.45;
+}
+
+.owner-cta{
+  padding:34px;
+}
+
+.owner-cta .gold-btn{
+  min-height:54px;
+  padding-inline:28px;
+}
+
+.footer{
+  padding-bottom:120px;
+}
+
+.bottom-nav{
+  box-shadow:0 -10px 30px rgba(0,0,0,.18);
+}
+
+.latest-title-v101{
+  max-width:100%;
+  word-break:keep-all;
+  overflow-wrap:normal;
+}
+
+/* Avoid fixed navigation overlapping scroll targets / last content */
+section[id],
+div[id]{
+  scroll-margin-bottom:100px;
+}
+
+@media(max-width:860px){
+  .hero-grid{
+    gap:30px;
+  }
+
+  .hero-art{
+    min-height:255px;
+  }
+
+  .section{
+    scroll-margin-top:88px;
+  }
+}
+
+@media(max-width:560px){
+  body{
+    padding-bottom:calc(82px + env(safe-area-inset-bottom));
+  }
+
+  main{
+    padding-bottom:48px;
+  }
+
+  .site-header{
+    box-shadow:0 1px 0 rgba(228,185,79,.12);
+  }
+
+  .header-inner{
+    height:68px;
+    gap:10px;
+  }
+
+  .brand{
+    gap:10px;
+  }
+
+  .brand img{
+    width:46px;
+    height:46px;
+  }
+
+  .brand-jp{
+    font-size:14px;
+    letter-spacing:.035em;
+  }
+
+  .brand-en{
+    margin-top:1px;
+    font-size:7px;
+    letter-spacing:.12em;
+  }
+
+  .pill-btn{
+    min-width:116px;
+    padding:10px 12px;
+    font-size:11px;
+  }
+
+  .hero{
+    padding:40px 0 36px;
+  }
+
+  .hero-grid{
+    gap:26px;
+  }
+
+  .hero h1{
+    font-size:35px;
+    line-height:1.28;
+  }
+
+  .hero-lead{
+    margin-top:15px;
+    font-size:12px;
+    line-height:1.8;
+  }
+
+  .search-panel{
+    margin-top:23px;
+    padding:14px;
+    border-radius:18px;
+    gap:10px;
+  }
+
+  .search-panel select,
+  .search-panel input,
+  .search-panel button{
+    height:52px;
+    border-radius:12px;
+  }
+
+  .quick-tags{
+    gap:8px;
+    margin-top:14px;
+  }
+
+  .quick-tags a{
+    padding:7px 11px;
+    font-size:11px;
+  }
+
+  .hero-art{
+    min-height:232px;
+    border-radius:22px;
+    background-position:center 44%;
+  }
+
+  .hero-art-copy{
+    padding:18px 18px 17px;
+  }
+
+  .hero-art-copy span{
+    font-size:8px;
+  }
+
+  .hero-art-copy b{
+    font-size:20px;
+  }
+
+  .section{
+    padding:50px 0;
+  }
+
+  .section.soft{
+    padding-top:52px;
+  }
+
+  .section-head{
+    margin-bottom:22px;
+  }
+
+  .section-head h2{
+    font-size:26px;
+    line-height:1.35;
+  }
+
+  .latest-title-v101{
+    font-size:25px !important;
+    line-height:1.38 !important;
+    max-width:270px;
+  }
+
+  .section-link{
+    padding-top:7px;
+    white-space:nowrap;
+  }
+
+  .category-grid{
+    gap:12px;
+  }
+
+  .category-card{
+    min-height:146px;
+    padding:18px 16px;
+    border-radius:17px;
+  }
+
+  .category-card .category-icon{
+    min-height:36px;
+    margin-bottom:16px;
+    font-size:28px;
+  }
+
+  .category-card b{
+    margin-top:0;
+    font-size:15px;
+  }
+
+  .category-card small{
+    margin-top:7px;
+    font-size:11px;
+    line-height:1.45;
+  }
+
+  .shop-grid{
+    gap:16px;
+  }
+
+  .shop-photo{
+    height:150px;
+  }
+
+  .shop-body{
+    padding:17px;
+  }
+
+  .shop-meta{
+    font-size:10px;
+  }
+
+  .shop-name{
+    font-size:17px;
+  }
+
+  .shop-desc{
+    font-size:11px;
+    line-height:1.65;
+  }
+
+  .badge{
+    font-size:9px;
+    padding:4px 8px;
+  }
+
+  .news-list{
+    gap:11px;
+  }
+
+  .news-item{
+    grid-template-columns:52px minmax(0,1fr) 14px;
+    gap:11px;
+    min-height:102px;
+    padding:17px 14px;
+    border-radius:16px;
+  }
+
+  .news-item time{
+    font-size:12px;
+  }
+
+  .news-item b{
+    font-size:13px;
+    line-height:1.48;
+  }
+
+  .news-item small{
+    font-size:10px;
+  }
+
+  .owner-cta{
+    padding:24px 21px 25px;
+    gap:20px;
+    border-radius:22px;
+  }
+
+  .owner-cta h2{
+    font-size:24px;
+    line-height:1.45;
+  }
+
+  .owner-cta p{
+    line-height:1.8;
+  }
+
+  .owner-cta .gold-btn{
+    width:100%;
+    min-height:56px;
+  }
+
+  .footer{
+    padding-top:38px;
+    padding-bottom:calc(116px + env(safe-area-inset-bottom));
+  }
+
+  .footer-brand{
+    font-size:16px;
+    line-height:1.5;
+  }
+
+  .footer-links{
+    gap:12px 16px;
+    line-height:1.6;
+  }
+
+  .bottom-nav{
+    min-height:72px;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+
+  .bottom-nav a{
+    height:72px;
+  }
+}
