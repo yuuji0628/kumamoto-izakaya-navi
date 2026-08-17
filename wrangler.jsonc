@@ -9,10 +9,6 @@
     "binding": "ASSETS",
     "run_worker_first": [
       "/api/*",
-      "/admin",
-      "/admin/",
-      "/admin-login",
-      "/admin-login/",
       "/db-status"
     ]
   },
