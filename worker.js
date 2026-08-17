@@ -283,7 +283,7 @@ async function handleApi(request, env, url) {
     const me = await requireAdmin(request, env);
     return json({
       ok:true,
-      version:"1.07",
+      version:"1.08",
       reset_applied,
       needs_setup: count===0,
       authenticated: !!me,
@@ -297,7 +297,7 @@ async function handleApi(request, env, url) {
     const email = clean(x.email, 200).toLowerCase();
     const password = String(x.password || "");
     if (!email || !email.includes("@")) return json({ok:false,error:"EMAIL_REQUIRED"},{status:400});
-    if (password.length < 10) return json({ok:false,error:"PASSWORD_TOO_SHORT"},{status:400});
+    if (password.length < 8) return json({ok:false,error:"PASSWORD_TOO_SHORT"},{status:400});
     const salt = randomToken(16);
     const hash = await hashPassword(password, salt);
     const t = nowIso();
@@ -378,7 +378,7 @@ async function handleApi(request, env, url) {
   }
 
   if (url.pathname === "/api/admin/version" && request.method === "GET") {
-    return json({ok:true,version:"1.07",admin_setup_fix:true,d1_schema_fix:true});
+    return json({ok:true,version:"1.08",admin_setup_fix:true,d1_schema_fix:true});
   }
 
   // everything below requires admin

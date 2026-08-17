@@ -21,6 +21,6 @@
     "enabled": true
   },
   "vars": {
-    "KIN_VERSION": "1.06"
+    "KIN_VERSION": "1.08"
   }
 }
