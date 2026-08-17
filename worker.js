@@ -119,32 +119,33 @@ function slugify(name) {
 let schemaPromise;
 async function ensureSchema(env) {
   if (!env.DB) throw new Error("DB_BINDING_MISSING");
+
   if (!schemaPromise) {
-    schemaPromise = env.DB.exec(`
-      CREATE TABLE IF NOT EXISTS admins (
+    const statements = [
+      `CREATE TABLE IF NOT EXISTS admins (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
         password_salt TEXT NOT NULL,
         created_at TEXT NOT NULL
-      );
+      )`,
 
-      CREATE TABLE IF NOT EXISTS app_settings (
+      `CREATE TABLE IF NOT EXISTS app_settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
         updated_at TEXT NOT NULL
-      );
+      )`,
 
-      CREATE TABLE IF NOT EXISTS admin_sessions (
+      `CREATE TABLE IF NOT EXISTS admin_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         admin_id INTEGER NOT NULL,
         token_hash TEXT NOT NULL UNIQUE,
         expires_at TEXT NOT NULL,
         created_at TEXT NOT NULL,
         FOREIGN KEY(admin_id) REFERENCES admins(id)
-      );
+      )`,
 
-      CREATE TABLE IF NOT EXISTS shops (
+      `CREATE TABLE IF NOT EXISTS shops (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         slug TEXT NOT NULL UNIQUE,
         name TEXT NOT NULL,
@@ -161,9 +162,9 @@ async function ensureSchema(env) {
         is_published INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
-      );
+      )`,
 
-      CREATE TABLE IF NOT EXISTS submissions (
+      `CREATE TABLE IF NOT EXISTS submissions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         shop_name TEXT NOT NULL,
         contact_name TEXT DEFAULT '',
@@ -182,9 +183,9 @@ async function ensureSchema(env) {
         status TEXT NOT NULL DEFAULT 'pending',
         created_at TEXT NOT NULL,
         reviewed_at TEXT DEFAULT ''
-      );
+      )`,
 
-      CREATE TABLE IF NOT EXISTS jobs (
+      `CREATE TABLE IF NOT EXISTS jobs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         shop_id INTEGER,
         title TEXT NOT NULL,
@@ -195,19 +196,28 @@ async function ensureSchema(env) {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         FOREIGN KEY(shop_id) REFERENCES shops(id)
-      );
+      )`,
 
-      CREATE INDEX IF NOT EXISTS idx_shops_published ON shops(is_published, updated_at);
-      CREATE INDEX IF NOT EXISTS idx_submissions_status ON submissions(status, created_at);
-      CREATE INDEX IF NOT EXISTS idx_sessions_token ON admin_sessions(token_hash);
-    `).catch(err => {
+      `CREATE INDEX IF NOT EXISTS idx_shops_published
+        ON shops(is_published, updated_at)`,
+
+      `CREATE INDEX IF NOT EXISTS idx_submissions_status
+        ON submissions(status, created_at)`,
+
+      `CREATE INDEX IF NOT EXISTS idx_sessions_token
+        ON admin_sessions(token_hash)`
+    ];
+
+    schemaPromise = env.DB.batch(
+      statements.map(sql => env.DB.prepare(sql))
+    ).catch(err => {
       schemaPromise = null;
       throw err;
     });
   }
+
   await schemaPromise;
 }
-
 async function adminCount(env) {
   await ensureSchema(env);
   const r = await env.DB.prepare("SELECT COUNT(*) AS c FROM admins").first();
@@ -273,7 +283,7 @@ async function handleApi(request, env, url) {
     const me = await requireAdmin(request, env);
     return json({
       ok:true,
-      version:"1.06",
+      version:"1.07",
       reset_applied,
       needs_setup: count===0,
       authenticated: !!me,
@@ -368,7 +378,7 @@ async function handleApi(request, env, url) {
   }
 
   if (url.pathname === "/api/admin/version" && request.method === "GET") {
-    return json({ok:true,version:"1.06",admin_setup_fix:true});
+    return json({ok:true,version:"1.07",admin_setup_fix:true,d1_schema_fix:true});
   }
 
   // everything below requires admin
