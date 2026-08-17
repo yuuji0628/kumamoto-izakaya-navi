@@ -204,6 +204,23 @@ async function ensureSchema(env) {
       `CREATE INDEX IF NOT EXISTS idx_submissions_status
         ON submissions(status, created_at)`,
 
+      `CREATE TABLE IF NOT EXISTS lead_candidates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        area TEXT DEFAULT '',
+        genre TEXT DEFAULT '',
+        address TEXT DEFAULT '',
+        source_url TEXT DEFAULT '',
+        instagram TEXT DEFAULT '',
+        phone TEXT DEFAULT '',
+        snippet TEXT DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'new',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+
+      `CREATE INDEX IF NOT EXISTS idx_lead_candidates_status
+        ON lead_candidates(status, created_at)`,
       `CREATE INDEX IF NOT EXISTS idx_sessions_token
         ON admin_sessions(token_hash)`
     ];
@@ -283,7 +300,7 @@ async function handleApi(request, env, url) {
     const me = await requireAdmin(request, env);
     return json({
       ok:true,
-      version:"1.09",
+      version:"1.10",
       reset_applied,
       needs_setup: count===0,
       authenticated: !!me,
@@ -308,13 +325,13 @@ async function handleApi(request, env, url) {
         "INSERT INTO admins(email,password_hash,password_salt,created_at) VALUES(?,?,?,?)"
       ).bind(email, hash, salt, t).run();
 
-      return json({ok:true,version:"1.09"});
+      return json({ok:true,version:"1.10"});
     } catch (e) {
       return json({
         ok:false,
         error:"BOOTSTRAP_FAILED",
         detail:String(e?.message || e),
-        version:"1.09"
+        version:"1.10"
       }, {status:500});
     }
   }
@@ -390,7 +407,7 @@ async function handleApi(request, env, url) {
   }
 
   if (url.pathname === "/api/admin/version" && request.method === "GET") {
-    return json({ok:true,version:"1.09",admin_setup_fix:true,d1_schema_fix:true});
+    return json({ok:true,version:"1.10",admin_setup_fix:true,d1_schema_fix:true});
   }
 
   // everything below requires admin
@@ -501,6 +518,154 @@ async function handleApi(request, env, url) {
       "UPDATE submissions SET status='rejected',reviewed_at=? WHERE id=?"
     ).bind(nowIso(), Number(reject[1])).run();
     return json({ok:true});
+  }
+
+
+  // ----- Admin jobs -----
+  if (url.pathname === "/api/admin/jobs" && request.method === "GET") {
+    const {results=[]} = await env.DB.prepare(`
+      SELECT j.*, s.name AS shop_name
+      FROM jobs j LEFT JOIN shops s ON s.id=j.shop_id
+      ORDER BY j.updated_at DESC, j.id DESC
+    `).all();
+    return json({ok:true,jobs:results});
+  }
+
+  if (url.pathname === "/api/admin/jobs" && request.method === "POST") {
+    let x; try{x=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+    const title=clean(x.title,180);
+    if(!title)return json({ok:false,error:"TITLE_REQUIRED"},{status:400});
+    const t=nowIso();
+    const r=await env.DB.prepare(`
+      INSERT INTO jobs(shop_id,title,salary,employment_type,description,is_published,created_at,updated_at)
+      VALUES(?,?,?,?,?,?,?,?)
+    `).bind(
+      x.shop_id?Number(x.shop_id):null,title,clean(x.salary,120),clean(x.employment_type,100),
+      clean(x.description,5000),bool(x.is_published),t,t
+    ).run();
+    return json({ok:true,id:r.meta?.last_row_id},{status:201});
+  }
+
+  const jobMatch=url.pathname.match(/^\/api\/admin\/jobs\/(\d+)$/);
+  if(jobMatch && request.method==="PATCH"){
+    const id=Number(jobMatch[1]);
+    const cur=await env.DB.prepare("SELECT * FROM jobs WHERE id=?").bind(id).first();
+    if(!cur)return json({ok:false,error:"NOT_FOUND"},{status:404});
+    let x; try{x=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+    await env.DB.prepare(`
+      UPDATE jobs SET shop_id=?,title=?,salary=?,employment_type=?,description=?,is_published=?,updated_at=? WHERE id=?
+    `).bind(
+      x.shop_id===undefined?cur.shop_id:(x.shop_id?Number(x.shop_id):null),
+      clean(x.title??cur.title,180),clean(x.salary??cur.salary,120),
+      clean(x.employment_type??cur.employment_type,100),clean(x.description??cur.description,5000),
+      x.is_published===undefined?Number(cur.is_published||0):bool(x.is_published),nowIso(),id
+    ).run();
+    return json({ok:true});
+  }
+  if(jobMatch && request.method==="DELETE"){
+    await env.DB.prepare("DELETE FROM jobs WHERE id=?").bind(Number(jobMatch[1])).run();
+    return json({ok:true});
+  }
+
+  // ----- Lead / prospecting -----
+  if (url.pathname === "/api/admin/leads" && request.method === "GET") {
+    const {results=[]}=await env.DB.prepare(`
+      SELECT * FROM lead_candidates
+      ORDER BY CASE status WHEN 'new' THEN 0 WHEN 'contacted' THEN 1 ELSE 2 END, id DESC
+    `).all();
+    return json({ok:true,leads:results});
+  }
+
+  if (url.pathname === "/api/admin/leads" && request.method === "POST") {
+    let x;try{x=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+    const name=clean(x.name,180);
+    if(!name)return json({ok:false,error:"NAME_REQUIRED"},{status:400});
+    const t=nowIso();
+    const r=await env.DB.prepare(`
+      INSERT INTO lead_candidates(name,area,genre,address,source_url,instagram,phone,snippet,status,created_at,updated_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?)
+    `).bind(
+      name,clean(x.area,100),clean(x.genre,100),clean(x.address,300),clean(x.source_url,600),
+      clean(x.instagram,300),clean(x.phone,100),clean(x.snippet,2000),clean(x.status||"new",30),t,t
+    ).run();
+    return json({ok:true,id:r.meta?.last_row_id},{status:201});
+  }
+
+  const leadMatch=url.pathname.match(/^\/api\/admin\/leads\/(\d+)$/);
+  if(leadMatch && request.method==="PATCH"){
+    const id=Number(leadMatch[1]);
+    const cur=await env.DB.prepare("SELECT * FROM lead_candidates WHERE id=?").bind(id).first();
+    if(!cur)return json({ok:false,error:"NOT_FOUND"},{status:404});
+    let x;try{x=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+    await env.DB.prepare(`
+      UPDATE lead_candidates SET name=?,area=?,genre=?,address=?,source_url=?,instagram=?,phone=?,snippet=?,status=?,updated_at=? WHERE id=?
+    `).bind(
+      clean(x.name??cur.name,180),clean(x.area??cur.area,100),clean(x.genre??cur.genre,100),
+      clean(x.address??cur.address,300),clean(x.source_url??cur.source_url,600),
+      clean(x.instagram??cur.instagram,300),clean(x.phone??cur.phone,100),
+      clean(x.snippet??cur.snippet,2000),clean(x.status??cur.status,30),nowIso(),id
+    ).run();
+    return json({ok:true});
+  }
+  if(leadMatch && request.method==="DELETE"){
+    await env.DB.prepare("DELETE FROM lead_candidates WHERE id=?").bind(Number(leadMatch[1])).run();
+    return json({ok:true});
+  }
+
+  if (url.pathname === "/api/admin/lead-search" && request.method === "POST") {
+    let x;try{x=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+    const area=clean(x.area,100)||"熊本市";
+    const keyword=clean(x.keyword,120)||"居酒屋";
+    if(!env.SERPAPI_API_KEY){
+      return json({ok:false,error:"SERPAPI_KEY_MISSING",message:"SerpApiキー未設定。手動候補登録は利用できます。"},{status:503});
+    }
+
+    const q=`${area} ${keyword} Instagram`;
+    const apiUrl=new URL("https://serpapi.com/search.json");
+    apiUrl.searchParams.set("engine","google");
+    apiUrl.searchParams.set("q",q);
+    apiUrl.searchParams.set("hl","ja");
+    apiUrl.searchParams.set("gl","jp");
+    apiUrl.searchParams.set("num","10");
+    apiUrl.searchParams.set("api_key",env.SERPAPI_API_KEY);
+
+    const rr=await fetch(apiUrl.toString());
+    if(!rr.ok)return json({ok:false,error:"SERPAPI_FAILED",status:rr.status},{status:502});
+    const d=await rr.json();
+    const items=(d.organic_results||[]).slice(0,10).map(r=>({
+      name:clean(r.title,180),
+      area,
+      genre:keyword,
+      address:"",
+      source_url:clean(r.link,600),
+      snippet:clean(r.snippet,1500)
+    })).filter(x=>x.name);
+
+    let added=0;
+    for(const item of items){
+      const dup=await env.DB.prepare(
+        "SELECT id FROM lead_candidates WHERE name=? AND source_url=? LIMIT 1"
+      ).bind(item.name,item.source_url).first();
+      if(dup)continue;
+      const t=nowIso();
+      await env.DB.prepare(`
+        INSERT INTO lead_candidates(name,area,genre,address,source_url,instagram,phone,snippet,status,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?)
+      `).bind(item.name,item.area,item.genre,item.address,item.source_url,"","",item.snippet,"new",t,t).run();
+      added++;
+    }
+    return json({ok:true,found:items.length,added});
+  }
+
+  if (url.pathname === "/api/admin/access-summary" && request.method === "GET") {
+    const shopCount=await env.DB.prepare("SELECT COUNT(*) c FROM shops").first();
+    const pubCount=await env.DB.prepare("SELECT COUNT(*) c FROM shops WHERE is_published=1").first();
+    const jobCount=await env.DB.prepare("SELECT COUNT(*) c FROM jobs WHERE is_published=1").first();
+    const leadCount=await env.DB.prepare("SELECT COUNT(*) c FROM lead_candidates WHERE status='new'").first();
+    return json({ok:true,summary:{
+      shops:Number(shopCount?.c||0),published:Number(pubCount?.c||0),
+      jobs:Number(jobCount?.c||0),new_leads:Number(leadCount?.c||0)
+    }});
   }
 
   return json({ok:false,error:"NOT_FOUND"},{status:404});

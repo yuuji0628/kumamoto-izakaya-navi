@@ -3,115 +3,121 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>管理画面 | 熊本居酒屋ナビ</title>
 <style>
-:root{--bg:#060b12;--bg2:#08111a;--card:#0e1721;--line:#293744;--gold:#e4b94f;--text:#f3f5f7;--muted:#8e99a5;--red:#c85a5a;--green:#67bd87}
+:root{--bg:#050a10;--panel:#0a131c;--panel2:#0d1823;--line:#2a3947;--gold:#e8ba48;--text:#f5f7f8;--muted:#8995a2;--red:#d16a6a;--green:#68c28a;--blue:#6ea8ff}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif}
-button,input,select,textarea{font:inherit}.top{position:sticky;top:0;z-index:20;background:rgba(5,10,16,.96);border-bottom:1px solid #26323d;backdrop-filter:blur(14px)}
-.topin{max-width:1100px;margin:auto;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}.brand{display:flex;align-items:center;gap:10px}.brand img{width:44px;height:44px;object-fit:cover;border-radius:11px}.brand b{font-family:"Yu Mincho",serif}.brand small{display:block;color:var(--gold);font-size:7px;letter-spacing:.14em}
-.logout{border:1px solid #34414d;background:#0b131b;color:#aeb8c1;border-radius:999px;padding:9px 13px}.wrap{max-width:1100px;margin:auto;padding:25px 16px 80px}
-.hero{display:flex;justify-content:space-between;align-items:end;gap:16px;margin-bottom:20px}.hero h1{font-family:"Yu Mincho",serif;font-size:30px;margin:0}.hero p{color:var(--muted);font-size:12px;margin:4px 0 0}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.stat{border:1px solid var(--line);background:var(--card);border-radius:16px;padding:15px}.stat b{font-size:25px;color:var(--gold)}.stat small{display:block;color:var(--muted)}
-.tabs{display:flex;gap:7px;overflow:auto;margin:20px 0 14px}.tab{white-space:nowrap;border:1px solid #33404c;background:#0b141d;color:#9ea8b2;border-radius:999px;padding:9px 13px;font-weight:800;font-size:12px}.tab.active{background:var(--gold);color:#151009;border-color:var(--gold)}
-.panel{display:none}.panel.active{display:block}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.toolbar h2{font-size:20px;margin:0}.gold{border:0;border-radius:12px;background:var(--gold);color:#151009;font-weight:900;padding:11px 15px}
-.list{display:grid;gap:10px}.item{border:1px solid var(--line);background:var(--card);border-radius:17px;padding:15px}.row{display:flex;align-items:start;justify-content:space-between;gap:12px}.item h3{margin:3px 0 5px;font-size:16px}.meta{color:var(--muted);font-size:11px}.desc{color:#aab3bc;font-size:12px;line-height:1.6;margin:8px 0}.badges{display:flex;flex-wrap:wrap;gap:5px}.badge{border:1px solid #40505f;color:#aeb8c1;border-radius:999px;padding:3px 7px;font-size:9px}.badge.pub{border-color:#3e7354;color:#7ed39d}.badge.draft{border-color:#755e2a;color:#dfbc62}
-.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.mini{border:1px solid #394754;background:#0a121a;color:#cad1d7;border-radius:10px;padding:8px 10px;font-size:11px}.mini.danger{color:#e27f7f;border-color:#663a3a}
-.empty{padding:28px;border:1px dashed #33404c;border-radius:15px;color:#8995a0;text-align:center}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:50;display:none;align-items:flex-end;justify-content:center}.modal.open{display:flex}.sheet{width:min(100%,700px);max-height:92vh;overflow:auto;background:#0c151f;border:1px solid #354250;border-radius:22px 22px 0 0;padding:20px 17px calc(24px + env(safe-area-inset-bottom))}
-.sheet h2{margin:0 0 15px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:grid;gap:5px}.field.full{grid-column:1/-1}.field label{font-size:11px;color:#adb7c0;font-weight:800}.field input,.field select,.field textarea{width:100%;border:1px solid #344250;border-radius:11px;background:#07101a;color:#fff;padding:11px}.field textarea{min-height:100px}.check{display:flex;gap:8px;align-items:center;color:#c3cbd2;font-size:12px}.modal-actions{display:flex;gap:8px;margin-top:15px}.modal-actions button{flex:1;height:48px;border-radius:12px}.cancel{background:#121c26;color:#b4bec7;border:1px solid #34414d}.save{background:var(--gold);color:#17120b;border:0;font-weight:900}
-.status{font-size:11px;color:#8d98a4;margin-bottom:12px}
-@media(max-width:600px){.stats{grid-template-columns:1fr 1fr}.stats .stat:last-child{grid-column:1/-1}.grid{grid-template-columns:1fr}.field.full{grid-column:auto}.hero h1{font-size:25px}.toolbar{align-items:start}}
+button,input,select,textarea{font:inherit}.top{position:sticky;top:0;z-index:20;background:rgba(4,9,15,.96);border-bottom:1px solid #26323c;backdrop-filter:blur(14px)}
+.topin{max-width:1180px;margin:auto;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.brand{display:flex;align-items:center;gap:10px}.brand img{width:42px;height:42px;border-radius:11px}.brand b{font-family:"Yu Mincho",serif;font-size:17px}.brand small{display:block;color:var(--gold);font-size:7px;letter-spacing:.15em}
+.top-actions{display:flex;gap:8px}.ghost{border:1px solid #354552;background:#0b141d;color:#aeb8c2;border-radius:999px;padding:9px 12px;font-size:11px}
+.wrap{max-width:1180px;margin:auto;padding:18px 14px 90px}.hero{display:flex;justify-content:space-between;align-items:end;gap:10px}.hero h1{font-family:"Yu Mincho",serif;font-size:28px;margin:0}.hero p{color:var(--muted);font-size:11px;margin:5px 0}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px}.stat b{font-size:24px;color:var(--gold)}.stat small{display:block;color:var(--muted);font-size:10px;margin-top:2px}
+.tabs{display:flex;gap:6px;overflow:auto;padding-bottom:3px;margin:15px 0}.tab{white-space:nowrap;border:1px solid #344452;background:#0a131c;color:#98a4af;border-radius:999px;padding:9px 12px;font-size:11px;font-weight:900}.tab.active{background:var(--gold);border-color:var(--gold);color:#18120a}
+.panel{display:none}.panel.active{display:block}.section-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}.section-head h2{font-size:19px;margin:0}.gold{border:0;background:var(--gold);color:#171109;font-weight:900;border-radius:11px;padding:10px 13px}.mini{border:1px solid #384956;background:#0a131c;color:#c3ccd4;border-radius:9px;padding:7px 9px;font-size:10px}.danger{color:#e48787;border-color:#6b3c3c}.success{color:#82d9a0;border-color:#3b694a}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:13px;margin-bottom:9px}.row{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.card h3{margin:2px 0 5px;font-size:15px}.meta{color:var(--muted);font-size:10px}.desc{color:#a8b2bc;font-size:11px;line-height:1.6;margin:7px 0}.badges,.actions{display:flex;gap:5px;flex-wrap:wrap}.badge{border:1px solid #41515f;border-radius:999px;padding:3px 7px;color:#a9b4be;font-size:8px}.pub{color:#81d39b;border-color:#3f6e51}.draft{color:#e0bd65;border-color:#6b592e}.new{color:#efc653;border-color:#80651d}.empty{border:1px dashed #364553;border-radius:14px;color:#84909c;text-align:center;padding:27px 12px}
+.formcard{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:13px}.formgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.field{display:grid;gap:4px}.field.full{grid-column:1/-1}.field label{font-size:9px;color:#aeb8c1;font-weight:800}.field input,.field select,.field textarea{width:100%;background:#07101a;border:1px solid #344452;color:#fff;border-radius:9px;padding:10px;font-size:12px}.field textarea{min-height:85px}.checks{display:flex;gap:12px;flex-wrap:wrap;margin:9px 0;color:#b7c0c9;font-size:10px}.checks label{display:flex;align-items:center;gap:5px}
+.notice{padding:10px 11px;border:1px solid #66562e;background:rgba(232,186,72,.05);border-radius:11px;color:#dbc16f;font-size:10px;line-height:1.55;margin-bottom:10px}
+.searchbar{display:grid;grid-template-columns:1fr 1fr auto;gap:7px;margin-bottom:10px}.searchbar input,.searchbar select{background:#07101a;border:1px solid #344452;color:#fff;border-radius:10px;padding:10px;font-size:11px}
+.access-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.access-card{padding:17px;background:var(--panel);border:1px solid var(--line);border-radius:14px}.access-card b{font-size:24px;color:var(--gold)}.access-card small{display:block;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#101b25;border:1px solid #40505e;color:#e9eef2;border-radius:999px;padding:10px 15px;font-size:11px;display:none;z-index:80}.toast.show{display:block}
+@media(max-width:650px){.stats{grid-template-columns:1fr 1fr}.formgrid{grid-template-columns:1fr}.field.full{grid-column:auto}.searchbar{grid-template-columns:1fr 1fr}.searchbar button{grid-column:1/-1}.hero h1{font-size:24px}.brand b{font-size:15px}}
 </style></head><body>
-<header class="top"><div class="topin"><div class="brand"><img src="logo-emblem.jpg"><div><b>熊本居酒屋ナビ 管理</b><small>KUMAMOTO IZAKAYA NAVI</small></div></div><button class="logout" id="logout">ログアウト</button></div></header>
+<header class="top"><div class="topin"><div class="brand"><img src="logo-emblem.jpg"><div><b>熊本居酒屋ナビ 管理</b><small>KUMAMOTO IZAKAYA NAVI</small></div></div><div class="top-actions"><a class="ghost" href="/" target="_blank">サイト</a><button id="logout" class="ghost">ログアウト</button></div></div></header>
 <main class="wrap">
-<div class="hero"><div><h1>管理画面</h1><p>店舗・掲載申込みを管理できます。</p></div><a href="/" target="_blank" style="color:#e4b94f;font-size:12px">サイトを見る →</a></div>
-<div id="status" class="status">読み込み中...</div>
-<div class="stats"><div class="stat"><b id="statShops">0</b><small>登録店舗</small></div><div class="stat"><b id="statPub">0</b><small>公開中</small></div><div class="stat"><b id="statSub">0</b><small>未対応申込み</small></div></div>
-<div class="tabs"><button class="tab active" data-tab="shops">店舗管理</button><button class="tab" data-tab="submissions">掲載申込み</button></div>
+<div class="hero"><div><h1>管理画面</h1><p>熊本BAR NAVIと同じ操作感で管理できます。</p></div><small id="status" class="meta">読込中...</small></div>
+<div class="stats"><div class="stat"><b id="stShop">0</b><small>店舗</small></div><div class="stat"><b id="stPub">0</b><small>公開中</small></div><div class="stat"><b id="stJob">0</b><small>求人</small></div><div class="stat"><b id="stLead">0</b><small>開拓候補</small></div></div>
+<div class="tabs">
+<button class="tab active" data-tab="shops">店舗</button>
+<button class="tab" data-tab="jobs">求人</button>
+<button class="tab" data-tab="submissions">申込み</button>
+<button class="tab" data-tab="requests">店舗申請</button>
+<button class="tab" data-tab="leads">開拓</button>
+<button class="tab" data-tab="access">アクセス</button>
+</div>
 
 <section id="panel-shops" class="panel active">
-<div class="toolbar"><h2>店舗一覧</h2><button class="gold" id="newShop">＋ 店舗を追加</button></div>
-<div id="shopList" class="list"></div>
-</section>
-<section id="panel-submissions" class="panel">
-<div class="toolbar"><h2>掲載申込み</h2><button class="mini" onclick="loadAll()">更新</button></div>
-<div id="submissionList" class="list"></div>
-</section>
-</main>
-
-<div id="shopModal" class="modal"><div class="sheet">
-<h2 id="modalTitle">店舗を追加</h2>
+<div class="formcard">
+<div class="section-head"><h2>店舗入力</h2><button class="mini" id="resetShop">新規入力</button></div>
 <form id="shopForm"><input type="hidden" id="shopId">
-<div class="grid">
+<div class="formgrid">
 <div class="field"><label>店舗名 *</label><input id="name" required></div>
-<div class="field"><label>URLスラッグ</label><input id="slug" placeholder="未入力で自動"></div>
+<div class="field"><label>URLスラッグ</label><input id="slug"></div>
 <div class="field"><label>エリア</label><input id="area" placeholder="熊本市"></div>
-<div class="field"><label>ジャンル</label><input id="genre" placeholder="焼き鳥"></div>
+<div class="field"><label>ジャンル</label><input id="genre" placeholder="居酒屋 / 焼き鳥など"></div>
 <div class="field full"><label>住所</label><input id="address"></div>
 <div class="field"><label>営業時間</label><input id="hours"></div>
 <div class="field"><label>定休日</label><input id="holiday"></div>
-<div class="field"><label>料金目安</label><input id="budget" placeholder="3,000〜5,000円"></div>
+<div class="field"><label>料金目安</label><input id="budget"></div>
 <div class="field"><label>電話</label><input id="phone"></div>
-<div class="field"><label>Instagram</label><input id="instagram"></div>
-<div class="field full"><label>特徴（カンマ区切り）</label><input id="features" placeholder="個室, 飲み放題, 宴会"></div>
-<div class="field full"><label>店舗紹介</label><textarea id="description"></textarea></div>
-<div class="field full"><label class="check"><input id="isPublished" type="checkbox"> 公開する</label></div>
+<div class="field full"><label>Instagram</label><input id="instagram"></div>
+<div class="field full"><label>特徴（カンマ区切り）</label><input id="features"></div>
+<div class="field full"><label>紹介文</label><textarea id="description"></textarea></div>
 </div>
-<div class="modal-actions"><button type="button" class="cancel" id="closeModal">キャンセル</button><button class="save">保存</button></div>
-</form></div></div>
+<div class="checks"><label><input type="checkbox" id="isPublished">公開</label><label><input type="checkbox" id="isFeatured">おすすめ</label><label><input type="checkbox" id="isNew">NEW</label><label><input type="checkbox" id="isRecruiting">求人あり</label></div>
+<button class="gold">保存</button>
+</form>
+</div>
+<div class="section-head"><h2>店舗一覧</h2><button class="mini" onclick="loadAll()">更新</button></div><div id="shopList"></div>
+</section>
 
+<section id="panel-jobs" class="panel">
+<div class="formcard"><div class="section-head"><h2>求人入力</h2><button class="mini" id="resetJob">新規入力</button></div>
+<form id="jobForm"><input type="hidden" id="jobId"><div class="formgrid">
+<div class="field"><label>店舗</label><select id="jobShop"></select></div><div class="field"><label>求人タイトル *</label><input id="jobTitle" required></div>
+<div class="field"><label>雇用形態</label><input id="jobType"></div><div class="field"><label>給与</label><input id="jobSalary"></div>
+<div class="field full"><label>仕事内容</label><textarea id="jobDesc"></textarea></div></div>
+<div class="checks"><label><input type="checkbox" id="jobPublished">公開</label></div><button class="gold">保存</button></form></div>
+<div class="section-head"><h2>求人一覧</h2></div><div id="jobList"></div>
+</section>
+
+<section id="panel-submissions" class="panel"><div class="section-head"><h2>掲載申込み</h2><button class="mini" onclick="loadAll()">更新</button></div><div id="submissionList"></div></section>
+<section id="panel-requests" class="panel"><div class="notice">店舗申請は、店舗様から届いた掲載申込みを「正式掲載へ切替・承認」するための確認画面です。</div><div id="requestList"></div></section>
+
+<section id="panel-leads" class="panel">
+<div class="notice">開拓候補を探して管理できます。SerpApiキーが設定済みなら自動検索、未設定でも手動登録できます。</div>
+<div class="searchbar"><input id="leadArea" value="熊本市" placeholder="エリア"><input id="leadKeyword" value="居酒屋" placeholder="キーワード"><button class="gold" id="leadSearch">候補を探す</button></div>
+<div class="formcard"><div class="section-head"><h2>候補を手動追加</h2></div><div class="formgrid">
+<div class="field"><label>店舗名</label><input id="leadName"></div><div class="field"><label>エリア</label><input id="leadManualArea" value="熊本市"></div><div class="field full"><label>情報元URL</label><input id="leadUrl"></div></div><button class="gold" id="leadAdd" type="button">候補に追加</button></div>
+<div class="section-head"><h2>開拓候補</h2><button class="mini" onclick="loadAll()">更新</button></div><div id="leadList"></div>
+</section>
+
+<section id="panel-access" class="panel"><div class="section-head"><h2>アクセス / 運営状況</h2></div><div id="accessGrid" class="access-grid"></div></section>
+</main>
+<div id="toast" class="toast"></div>
 <script>
-const token=localStorage.getItem("kin_admin_token");
-if(!token)location.href="/admin-login";
+const token=localStorage.getItem("kin_admin_token"); if(!token)location.href="/admin-login";
 const H={"content-type":"application/json","authorization":"Bearer "+token};
-let shops=[], submissions=[];
-
-const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-async function api(path,opt={}){
-  const r=await fetch(path,{...opt,headers:{...H,...(opt.headers||{})},cache:"no-store"});
-  const d=await r.json().catch(()=>({}));
-  if(r.status===401){localStorage.removeItem("kin_admin_token");location.href="/admin-login";throw new Error("unauthorized")}
-  if(!r.ok||!d.ok)throw new Error(d.error||"API_ERROR");
-  return d;
-}
-async function loadAll(){
-  status.textContent="更新中...";
-  try{
-    const [a,b]=await Promise.all([api("/api/admin/shops"),api("/api/admin/submissions")]);
-    shops=a.shops||[];submissions=b.submissions||[];
-    renderShops();renderSubs();updateStats();status.textContent="最新の情報です";
-  }catch(e){status.textContent="読み込みに失敗しました: "+e.message}
-}
-function updateStats(){
-  statShops.textContent=shops.length;
-  statPub.textContent=shops.filter(x=>x.is_published).length;
-  statSub.textContent=submissions.filter(x=>x.status==="pending").length;
-}
-function renderShops(){
-  shopList.innerHTML=shops.length?shops.map(s=>`<article class="item"><div class="row"><div><div class="meta">${esc(s.area||"未設定")} / ${esc(s.genre||"居酒屋")}</div><h3>${esc(s.name)}</h3></div><span class="badge ${s.is_published?"pub":"draft"}">${s.is_published?"公開中":"非公開"}</span></div><div class="desc">${esc(s.description||"紹介文未設定")}</div><div class="badges">${(s.features||[]).slice(0,4).map(x=>`<span class="badge">${esc(x)}</span>`).join("")}</div><div class="actions"><button class="mini" onclick="editShop(${s.id})">編集</button><button class="mini" onclick="toggleShop(${s.id})">${s.is_published?"非公開にする":"公開する"}</button><a class="mini" target="_blank" href="/shop.html?slug=${encodeURIComponent(s.slug)}">確認</a><button class="mini danger" onclick="deleteShop(${s.id})">削除</button></div></article>`).join(""):'<div class="empty">店舗はまだありません。<br>「店舗を追加」から登録できます。</div>';
-}
-function renderSubs(){
-  submissionList.innerHTML=submissions.length?submissions.map(s=>`<article class="item"><div class="row"><div><div class="meta">${esc(s.created_at?.slice(0,10)||"")} / ${esc(s.area||"エリア未設定")}</div><h3>${esc(s.shop_name)}</h3></div><span class="badge ${s.status==="pending"?"draft":s.status==="approved"?"pub":""}">${s.status==="pending"?"未対応":s.status==="approved"?"承認済み":"見送り"}</span></div><div class="desc">担当: ${esc(s.contact_name||"-")}　${esc(s.email||"")}<br>${esc(s.genre||"")} / ${esc(s.hours||"")}<br>${esc(s.description||"")}</div>${s.status==="pending"?`<div class="actions"><button class="gold" onclick="approveSub(${s.id})">正式掲載として承認</button><button class="mini" onclick="rejectSub(${s.id})">見送る</button></div>`:""}</article>`).join(""):'<div class="empty">掲載申込みはまだありません。</div>';
-}
-function openModal(s=null){
-  shopForm.reset();shopId.value=s?.id||"";modalTitle.textContent=s?"店舗を編集":"店舗を追加";
-  if(s){name.value=s.name||"";slug.value=s.slug||"";area.value=s.area||"";genre.value=s.genre||"";address.value=s.address||"";hours.value=s.hours||"";holiday.value=s.holiday||"";budget.value=s.budget||"";phone.value=s.phone||"";instagram.value=s.instagram||"";features.value=(s.features||[]).join(", ");description.value=s.description||"";isPublished.checked=!!s.is_published}
-  shopModal.classList.add("open");
-}
-window.editShop=id=>openModal(shops.find(x=>x.id===id));
-window.toggleShop=async id=>{const s=shops.find(x=>x.id===id);if(!s)return;await api("/api/admin/shops/"+id,{method:"PATCH",body:JSON.stringify({is_published:!s.is_published})});loadAll()};
-window.deleteShop=async id=>{if(!confirm("この店舗を削除しますか？"))return;await api("/api/admin/shops/"+id,{method:"DELETE"});loadAll()};
-window.approveSub=async id=>{if(!confirm("この申込みを正式掲載として公開しますか？"))return;await api(`/api/admin/submissions/${id}/approve`,{method:"POST"});loadAll()};
-window.rejectSub=async id=>{if(!confirm("この申込みを見送りますか？"))return;await api(`/api/admin/submissions/${id}/reject`,{method:"POST"});loadAll()};
-newShop.onclick=()=>openModal();
-closeModal.onclick=()=>shopModal.classList.remove("open");
-shopModal.addEventListener("click",e=>{if(e.target===shopModal)shopModal.classList.remove("open")});
-shopForm.addEventListener("submit",async e=>{
- e.preventDefault();
- const id=shopId.value;
- const data={name:name.value,slug:slug.value,area:area.value,genre:genre.value,address:address.value,hours:hours.value,holiday:holiday.value,budget:budget.value,phone:phone.value,instagram:instagram.value,features:features.value,description:description.value,is_published:isPublished.checked};
- await api(id?"/api/admin/shops/"+id:"/api/admin/shops",{method:id?"PATCH":"POST",body:JSON.stringify(data)});
- shopModal.classList.remove("open");loadAll();
-});
-document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById("panel-"+b.dataset.tab).classList.add("active")});
-logout.onclick=async()=>{try{await api("/api/admin/logout",{method:"POST"})}catch{}localStorage.removeItem("kin_admin_token");location.href="/admin-login"};
+let shops=[],jobs=[],subs=[],leads=[];
+const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function toast(t){$("toast").textContent=t;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),1800)}
+async function api(path,opt={}){const r=await fetch(path,{...opt,headers:{...H,...(opt.headers||{})},cache:"no-store"});const d=await r.json().catch(()=>({}));if(r.status===401){localStorage.removeItem("kin_admin_token");location.href="/admin-login";throw 0}if(!r.ok||!d.ok)throw new Error(d.error||d.message||"API_ERROR");return d}
+async function loadAll(){status.textContent="更新中...";try{const [a,b,c,d,e]=await Promise.all([api("/api/admin/shops"),api("/api/admin/jobs"),api("/api/admin/submissions"),api("/api/admin/leads"),api("/api/admin/access-summary")]);shops=a.shops||[];jobs=b.jobs||[];subs=c.submissions||[];leads=d.leads||[];renderAll(e.summary||{});status.textContent="最新";}catch(err){status.textContent="読込エラー";console.error(err)}}
+function renderAll(sum){stShop.textContent=sum.shops??shops.length;stPub.textContent=sum.published??shops.filter(x=>x.is_published).length;stJob.textContent=sum.jobs??jobs.filter(x=>x.is_published).length;stLead.textContent=sum.new_leads??leads.filter(x=>x.status==="new").length;renderShops();renderJobs();renderSubs();renderRequests();renderLeads();renderAccess(sum);jobShop.innerHTML='<option value="">店舗未指定</option>'+shops.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("")}
+function renderShops(){shopList.innerHTML=shops.length?shops.map(s=>`<div class="card"><div class="row"><div><h3>${esc(s.name)}</h3><div class="meta">${esc(s.area||"未設定")} / ${esc(s.genre||"居酒屋")}</div></div><span class="badge ${s.is_published?"pub":"draft"}">${s.is_published?"公開":"非公開"}</span></div><div class="desc">${esc(s.description||"紹介文未設定")}</div><div class="badges">${s.is_published?'<span class="badge pub">公開</span>':''}<span class="badge">${esc(s.slug)}</span></div><div class="actions"><button class="mini" onclick="editShop(${s.id})">編集</button><a class="mini" target="_blank" href="/shop.html?slug=${encodeURIComponent(s.slug)}">確認</a><button class="mini danger" onclick="deleteShop(${s.id})">完全削除</button></div></div>`).join(""):'<div class="empty">店舗はまだありません。</div>'}
+function renderJobs(){jobList.innerHTML=jobs.length?jobs.map(j=>`<div class="card"><div class="row"><div><h3>${esc(j.title)}</h3><div class="meta">${esc(j.shop_name||"店舗未指定")} / ${esc(j.employment_type||"")}</div></div><span class="badge ${j.is_published?"pub":"draft"}">${j.is_published?"公開":"非公開"}</span></div><div class="desc">${esc(j.salary||"")}<br>${esc(j.description||"")}</div><div class="actions"><button class="mini" onclick="editJob(${j.id})">編集</button><button class="mini danger" onclick="deleteJob(${j.id})">削除</button></div></div>`).join(""):'<div class="empty">求人はまだありません。</div>'}
+function subCard(s,buttons){return `<div class="card"><div class="row"><div><h3>${esc(s.shop_name)}</h3><div class="meta">${esc(s.area||"")} / ${esc(s.genre||"")}</div></div><span class="badge ${s.status==="pending"?"draft":s.status==="approved"?"pub":""}">${s.status==="pending"?"未対応":s.status==="approved"?"承認済み":"見送り"}</span></div><div class="desc">${esc(s.description||"")}<br>${esc(s.email||"")} ${esc(s.phone||"")}</div>${buttons||""}</div>`}
+function renderSubs(){submissionList.innerHTML=subs.length?subs.map(s=>subCard(s,s.status==="pending"?`<div class="actions"><button class="mini success" onclick="approveSub(${s.id})">承認</button><button class="mini" onclick="rejectSub(${s.id})">見送り</button></div>`:"")).join(""):'<div class="empty">申込みはありません。</div>'}
+function renderRequests(){const p=subs.filter(s=>s.status==="pending");requestList.innerHTML=p.length?p.map(s=>subCard(s,`<div class="actions"><button class="gold" onclick="approveSub(${s.id})">正式掲載へ切替</button><button class="mini" onclick="prefillFromSub(${s.id})">店舗入力へコピー</button></div>`)).join(""):'<div class="empty">対応待ちの店舗申請はありません。</div>'}
+function renderLeads(){leadList.innerHTML=leads.length?leads.map(l=>`<div class="card"><div class="row"><div><h3>${esc(l.name)}</h3><div class="meta">${esc(l.area||"")} / ${esc(l.genre||"")}</div></div><span class="badge ${l.status==="new"?"new":""}">${esc(l.status)}</span></div><div class="desc">${esc(l.snippet||"")}</div><div class="actions">${l.source_url?`<a class="mini" target="_blank" href="${esc(l.source_url)}">情報元</a>`:""}<button class="mini success" onclick="leadToShop(${l.id})">店舗登録へ</button><button class="mini" onclick="markLead(${l.id},'contacted')">連絡済み</button><button class="mini danger" onclick="deleteLead(${l.id})">削除</button></div></div>`).join(""):'<div class="empty">開拓候補はまだありません。</div>'}
+function renderAccess(s){accessGrid.innerHTML=`<div class="access-card"><b>${s.shops||0}</b><small>登録店舗</small></div><div class="access-card"><b>${s.published||0}</b><small>公開店舗</small></div><div class="access-card"><b>${s.jobs||0}</b><small>公開求人</small></div><div class="access-card"><b>${s.new_leads||0}</b><small>未対応の開拓候補</small></div>`}
+function clearShop(){shopForm.reset();shopId.value="";isPublished.checked=false}
+window.editShop=id=>{const s=shops.find(x=>x.id===id);if(!s)return;shopId.value=s.id;name.value=s.name||"";slug.value=s.slug||"";area.value=s.area||"";genre.value=s.genre||"";address.value=s.address||"";hours.value=s.hours||"";holiday.value=s.holiday||"";budget.value=s.budget||"";phone.value=s.phone||"";instagram.value=s.instagram||"";features.value=(s.features||[]).join(", ");description.value=s.description||"";isPublished.checked=!!s.is_published;window.scrollTo({top:0,behavior:"smooth"})}
+window.deleteShop=async id=>{if(!confirm("完全削除しますか？"))return;await api("/api/admin/shops/"+id,{method:"DELETE"});toast("削除しました");loadAll()}
+shopForm.onsubmit=async e=>{e.preventDefault();const id=shopId.value;const d={name:name.value,slug:slug.value,area:area.value,genre:genre.value,address:address.value,hours:hours.value,holiday:holiday.value,budget:budget.value,phone:phone.value,instagram:instagram.value,features:features.value,description:description.value,is_published:isPublished.checked};await api(id?"/api/admin/shops/"+id:"/api/admin/shops",{method:id?"PATCH":"POST",body:JSON.stringify(d)});toast("保存しました");clearShop();loadAll()}
+resetShop.onclick=clearShop;
+function clearJob(){jobForm.reset();jobId.value=""}
+window.editJob=id=>{const j=jobs.find(x=>x.id===id);if(!j)return;jobId.value=j.id;jobShop.value=j.shop_id||"";jobTitle.value=j.title||"";jobType.value=j.employment_type||"";jobSalary.value=j.salary||"";jobDesc.value=j.description||"";jobPublished.checked=!!j.is_published;window.scrollTo({top:0,behavior:"smooth"})}
+window.deleteJob=async id=>{if(!confirm("求人を削除しますか？"))return;await api("/api/admin/jobs/"+id,{method:"DELETE"});loadAll()}
+jobForm.onsubmit=async e=>{e.preventDefault();const id=jobId.value;const d={shop_id:jobShop.value,title:jobTitle.value,employment_type:jobType.value,salary:jobSalary.value,description:jobDesc.value,is_published:jobPublished.checked};await api(id?"/api/admin/jobs/"+id:"/api/admin/jobs",{method:id?"PATCH":"POST",body:JSON.stringify(d)});toast("求人を保存しました");clearJob();loadAll()}
+resetJob.onclick=clearJob;
+window.approveSub=async id=>{if(!confirm("正式掲載として承認しますか？"))return;await api(`/api/admin/submissions/${id}/approve`,{method:"POST"});toast("正式掲載に切替ました");loadAll()}
+window.rejectSub=async id=>{await api(`/api/admin/submissions/${id}/reject`,{method:"POST"});loadAll()}
+window.prefillFromSub=id=>{const s=subs.find(x=>x.id===id);if(!s)return;name.value=s.shop_name||"";area.value=s.area||"";genre.value=s.genre||"";address.value=s.address||"";hours.value=s.hours||"";holiday.value=s.holiday||"";budget.value=s.budget||"";phone.value=s.phone||"";instagram.value=s.instagram||"";features.value=s.features||"";description.value=s.description||"";document.querySelector('[data-tab="shops"]').click();window.scrollTo({top:0,behavior:"smooth"})}
+leadSearch.onclick=async()=>{try{const d=await api("/api/admin/lead-search",{method:"POST",body:JSON.stringify({area:leadArea.value,keyword:leadKeyword.value})});toast(`${d.added}件追加しました`);loadAll()}catch(e){toast(e.message==="SERPAPI_KEY_MISSING"?"SerpApiキー未設定です":e.message)}}
+leadAdd.onclick=async()=>{if(!leadName.value.trim())return toast("店舗名を入力");await api("/api/admin/leads",{method:"POST",body:JSON.stringify({name:leadName.value,area:leadManualArea.value,source_url:leadUrl.value})});leadName.value="";leadUrl.value="";toast("候補追加");loadAll()}
+window.markLead=async(id,status)=>{await api("/api/admin/leads/"+id,{method:"PATCH",body:JSON.stringify({status})});loadAll()}
+window.deleteLead=async id=>{await api("/api/admin/leads/"+id,{method:"DELETE"});loadAll()}
+window.leadToShop=id=>{const l=leads.find(x=>x.id===id);if(!l)return;clearShop();name.value=l.name||"";area.value=l.area||"";genre.value=l.genre||"";address.value=l.address||"";instagram.value=l.instagram||"";phone.value=l.phone||"";description.value=l.snippet||"";document.querySelector('[data-tab="shops"]').click();window.scrollTo({top:0,behavior:"smooth"})}
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");$("panel-"+b.dataset.tab).classList.add("active")});
+logout.onclick=async()=>{try{await api("/api/admin/logout",{method:"POST"})}catch{}localStorage.removeItem("kin_admin_token");location.href="/admin-login"}
 loadAll();
 </script></body></html>
