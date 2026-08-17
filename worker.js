@@ -206,30 +206,33 @@ async function ensureSchema(env) {
     });
   }
   await schemaPromise;
-
-  // ver1.05: one-time administrator reset migration.
-  // This is not an exposed reset endpoint. It runs once per database,
-  // records completion in app_settings, and cannot be triggered again.
-  const resetKey = "admin_reset_ver105";
-  const done = await env.DB.prepare(
-    "SELECT value FROM app_settings WHERE key=? LIMIT 1"
-  ).bind(resetKey).first();
-
-  if (!done) {
-    await env.DB.batch([
-      env.DB.prepare("DELETE FROM admin_sessions"),
-      env.DB.prepare("DELETE FROM admins"),
-      env.DB.prepare(
-        "INSERT INTO app_settings(key,value,updated_at) VALUES(?,?,?)"
-      ).bind(resetKey, "done", nowIso())
-    ]);
-  }
 }
 
 async function adminCount(env) {
   await ensureSchema(env);
   const r = await env.DB.prepare("SELECT COUNT(*) AS c FROM admins").first();
   return Number(r?.c || 0);
+}
+
+
+async function forceSetupOnceVer106(env) {
+  await ensureSchema(env);
+  const key = "force_setup_ver106";
+  const done = await env.DB.prepare(
+    "SELECT value FROM app_settings WHERE key=? LIMIT 1"
+  ).bind(key).first();
+
+  if (done) return false;
+
+  // One transaction: clear only admin auth data and permanently mark migration complete.
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM admin_sessions"),
+    env.DB.prepare("DELETE FROM admins"),
+    env.DB.prepare(
+      "INSERT INTO app_settings(key,value,updated_at) VALUES(?,?,?)"
+    ).bind(key, "done", nowIso())
+  ]);
+  return true;
 }
 
 async function requireAdmin(request, env) {
@@ -265,9 +268,17 @@ async function handleApi(request, env, url) {
 
   // ----- Admin setup/auth -----
   if (url.pathname === "/api/admin/status" && request.method === "GET") {
+    const reset_applied = await forceSetupOnceVer106(env);
     const count = await adminCount(env);
     const me = await requireAdmin(request, env);
-    return json({ok:true, needs_setup: count===0, authenticated: !!me, admin: me ? {email:me.email}:null});
+    return json({
+      ok:true,
+      version:"1.06",
+      reset_applied,
+      needs_setup: count===0,
+      authenticated: !!me,
+      admin: me ? {email:me.email}:null
+    });
   }
 
   if (url.pathname === "/api/admin/bootstrap" && request.method === "POST") {
@@ -354,6 +365,10 @@ async function handleApi(request, env, url) {
       bool(x.wants_job), "pending", nowIso()
     ).run();
     return json({ok:true},{status:201});
+  }
+
+  if (url.pathname === "/api/admin/version" && request.method === "GET") {
+    return json({ok:true,version:"1.06",admin_setup_fix:true});
   }
 
   // everything below requires admin

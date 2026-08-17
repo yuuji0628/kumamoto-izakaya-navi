@@ -19,5 +19,8 @@
   ],
   "observability": {
     "enabled": true
+  },
+  "vars": {
+    "KIN_VERSION": "1.06"
   }
 }

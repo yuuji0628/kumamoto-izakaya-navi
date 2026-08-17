@@ -22,7 +22,7 @@ button{width:100%;height:52px;border:0;border-radius:13px;background:linear-grad
     <button id="submit">ログイン</button>
   </form>
   <div id="msg" class="msg"></div>
-  <div class="sub" id="hint">管理者のみアクセスできます。</div>
+  <div class="sub" id="hint">管理者のみアクセスできます。</div><div class="sub" style="text-align:center;opacity:.55">ver1.06</div>
   <a class="back" href="/">← サイトへ戻る</a>
 </div>
 <script>
@@ -30,7 +30,7 @@ let needsSetup=false;
 const msg=t=>document.getElementById("msg").textContent=t||"";
 async function status(){
   try{
-    const r=await fetch("/api/admin/status",{cache:"no-store"}),d=await r.json();
+    const r=await fetch("/api/admin/status?v=106&t="+Date.now(),{cache:"no-store",headers:{"cache-control":"no-cache"}}),d=await r.json();
     needsSetup=!!d.needs_setup;
     if(needsSetup){
       setupNotice.style.display="block";
