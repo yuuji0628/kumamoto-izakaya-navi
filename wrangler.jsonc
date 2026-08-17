@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "kumamoto-izakaya-navi",
+  "main": "worker.js",
+  "compatibility_date": "2026-08-17",
+  "keep_vars": true,
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*",
+      "/admin",
+      "/admin/",
+      "/admin-login",
+      "/admin-login/",
+      "/db-status"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

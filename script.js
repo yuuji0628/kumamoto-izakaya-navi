@@ -8,7 +8,13 @@ const DEMO_SHOPS=[
 
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 async function getShops(){
-  try{const r=await fetch("/api/shops",{cache:"no-store"});if(r.ok){const d=await r.json();const a=d.shops||d.results||[];if(a.length)return a}}catch(e){}
+  try{
+    const r=await fetch("/api/shops",{cache:"no-store"});
+    if(r.ok){
+      const d=await r.json();
+      if(d.ok)return d.shops||d.results||[];
+    }
+  }catch(e){}
   return DEMO_SHOPS;
 }
 function card(s){
@@ -45,7 +51,7 @@ async function detail(){
 function setupForms(){
  const hs=document.getElementById("homeSearch");if(hs)hs.addEventListener("submit",e=>{e.preventDefault();const f=new FormData(hs),p=new URLSearchParams();for(const [k,v] of f)if(v)p.set(k,v);location.href="izakayas.html?"+p});
  const sf=document.getElementById("shopFilter");if(sf)sf.addEventListener("submit",e=>{e.preventDefault();const f=new FormData(sf),p=new URLSearchParams();for(const [k,v] of f)if(v)p.set(k,v);location.href="izakayas.html?"+p});
- const lf=document.getElementById("listingForm");if(lf)lf.addEventListener("submit",e=>{e.preventDefault();const data=Object.fromEntries(new FormData(lf));delete data.photo;localStorage.setItem("kin_listing_draft",JSON.stringify(data));document.getElementById("formResult").innerHTML='<div style="margin-top:16px;padding:14px;border:1px solid #5f4c22;border-radius:12px;color:#e4b94f">入力内容を保存しました。D1接続後はこのボタンから管理画面へ直接送信できます。</div>';window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"})});
+ const lf=document.getElementById("listingForm");if(lf)lf.addEventListener("submit",async e=>{e.preventDefault();const btn=lf.querySelector('button[type="submit"]');const data=Object.fromEntries(new FormData(lf));delete data.photo;btn.disabled=true;btn.textContent="送信中...";try{const r=await fetch("/api/submissions",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(data)});const d=await r.json();if(!r.ok||!d.ok)throw new Error();document.getElementById("formResult").innerHTML='<div style="margin-top:16px;padding:14px;border:1px solid #3d6c50;border-radius:12px;color:#83d19f">掲載申込みを受け付けました。内容を確認後、掲載準備を進めます。</div>';lf.reset()}catch{document.getElementById("formResult").innerHTML='<div style="margin-top:16px;padding:14px;border:1px solid #6b3d3d;border-radius:12px;color:#e69595">送信に失敗しました。時間をおいてもう一度お試しください。</div>'}finally{btn.disabled=false;btn.textContent="掲載申込みを送信"}window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"})});
 }
 async function jobs(){
  const box=document.getElementById("jobList");if(!box)return;
