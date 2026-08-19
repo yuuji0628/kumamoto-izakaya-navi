@@ -373,7 +373,7 @@ button,[role="button"],.kin-quick-btn{touch-action:manipulation;-webkit-tap-high
 <div class="hero kin-hero-compact">
   <div class="kin-hero-copy">
     <b>熊本居酒屋ナビ 管理</b>
-    <span>KIN ADMIN <strong>ver1.25</strong></span>
+    <span>KIN ADMIN <strong>ver1.26</strong></span>
   </div>
   <small id="status" class="meta">読込中...</small>
 </div>
@@ -597,7 +597,8 @@ const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g
 function toast(t){$("toast").textContent=t;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),1800)}
 async function api(path,opt={}){const r=await fetch(path,{...opt,headers:{...H,...(opt.headers||{})},cache:"no-store"});const d=await r.json().catch(()=>({}));if(r.status===401){localStorage.removeItem("kin_admin_token");location.href="/admin-login";throw 0}if(!r.ok||!d.ok)throw new Error(d.error||d.message||"API_ERROR");return d}
 async function loadAll(){
-  status.textContent="更新中...";
+  const statusEl=$("status");
+  if(statusEl)statusEl.textContent="更新中...";
   const results=await Promise.allSettled([
     api("/api/admin/shops"),
     api("/api/admin/jobs"),
@@ -616,7 +617,7 @@ async function loadAll(){
   renderAll(summary);
 
   const failed=results.filter(x=>x.status==="rejected");
-  status.textContent=failed.length?`一部読込エラー (${failed.length})`:"最新";
+  if(statusEl)statusEl.textContent=failed.length?`一部読込エラー (${failed.length})`:"最新";
   if(failed.length)console.warn("KIN partial load errors",failed.map(x=>x.reason));
 }
 function renderAll(sum){
@@ -626,7 +627,7 @@ function renderAll(sum){
   const leadCount=sum.new_leads??leads.filter(x=>x.status==="new").length;
   const pendingCount=subs.filter(x=>x.status==="pending").length;
 
-  // ver1.25: コンパクト化で削除された旧カウンターを参照しない
+  // ver1.26: コンパクト化で削除された旧カウンターを参照しない
   const setText=(id,value)=>{const el=$(id);if(el)el.textContent=value};
   setText("opsShopCount",shopCount);
   setText("opsSubCount",pendingCount);
@@ -685,8 +686,6 @@ function renderShops(){
     </article>`;
   }).join(""):`<div class="empty">店舗がまだありません。</div>`;
 }
-loadGithubStatus();
-
 
 function switchAdminTab(name){
   const panel=$("panel-"+name);
@@ -713,7 +712,7 @@ if(adminMoreToggle&&adminMorePanel){
     adminMoreToggle.classList.toggle("active",!adminMorePanel.hidden);
   });
 }
-// ver1.25: iPhone/Safariでも確実に反応する委譲型ルーティング
+// ver1.26: iPhone/Safariでも確実に反応する委譲型ルーティング
 document.addEventListener("click",e=>{
   const btn=e.target.closest?.("[data-tab],[data-fixed-tab],[data-go-tab]");
   if(!btn)return;
@@ -731,7 +730,13 @@ if(logoutEl)logoutEl.addEventListener("click",async()=>{
   localStorage.removeItem("kin_admin_token");
   location.href="/admin-login";
 });
-loadAll();
+loadAll().catch(err=>{
+  console.error("KIN initial load error",err);
+  const statusEl=$("status");
+  if(statusEl)statusEl.textContent="読込エラー";
+  const list=$("shopList");
+  if(list&&!shops.length)list.innerHTML='<div class="empty">店舗データの読み込みに失敗しました。「すべて更新」を押してください。</div>';
+});
 
 async function loadSiteSettings(){
   try{
@@ -821,7 +826,10 @@ if(ghFileDropEl){
     }
   });
 }
-if(ghReloadEl)ghReloadEl.addEventListener("click",()=>loadGithubStatus());
+if(ghReloadEl)ghReloadEl.addEventListener("click",()=>{
+  if(typeof loadGithubStatus==="function")loadGithubStatus();
+  else toast("GitHub接続確認はサイト更新画面から確認してください");
+});
 
 if(ghUploadStartEl)ghUploadStartEl.addEventListener("click",async()=>{
   if(!ghSelectedFiles.length){toast("更新ファイルを選択してください");return}
