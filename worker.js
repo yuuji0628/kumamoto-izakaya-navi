@@ -3071,8 +3071,8 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
         INSERT INTO shops(
           slug,name,name_kana,area,address,hours,holiday,instagram,genre,features,description,
           budget_min,budget_max,seats,phone,is_recruiting,is_published,image_url,image_key,
-          is_featured,is_new,sort_order,listing_status,published_at
-        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'provisional',CURRENT_TIMESTAMP)
+          is_featured,is_new,sort_order,listing_status,published_at,created_at,updated_at
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'provisional',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
       `).bind(
         slug,gName,"",area,address,finalHours,finalHoliday,instagram,
         genre,finalFeatures,desc,budgetMin,budgetMax,null,phone,
@@ -3200,8 +3200,8 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
           INSERT INTO shops(
             slug,name,name_kana,area,address,hours,holiday,instagram,genre,features,description,
             budget_min,budget_max,seats,phone,is_recruiting,is_published,image_url,image_key,
-            is_featured,is_new,sort_order,listing_status,published_at
-          ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'provisional',CURRENT_TIMESTAMP)
+            is_featured,is_new,sort_order,listing_status,published_at,created_at,updated_at
+          ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'provisional',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
         `).bind(
           slug,name,"",area,address,finalHours,finalHoliday,instagram,
           genre,finalFeatures,desc,budgetMin,budgetMax,null,phone,
@@ -3281,8 +3281,8 @@ async function ensureIzakayaShopSchema(env){
       ["owner_token_hash","TEXT"],
       ["owner_token_created_at","TEXT"],
       ["business_status","TEXT"],
-      ["created_at","TEXT"],
-      ["updated_at","TEXT"]
+      ["created_at","TEXT DEFAULT CURRENT_TIMESTAMP"],
+      ["updated_at","TEXT DEFAULT CURRENT_TIMESTAMP"]
     ];
     for(const [name,type] of defs){
       if(existing.has(name))continue;
@@ -4977,8 +4977,8 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
             INSERT INTO shops (
               slug,name,name_kana,area,address,hours,holiday,instagram,genre,features,description,
               budget_min,budget_max,seats,phone,is_recruiting,is_published,image_url,image_key,
-              is_featured,is_new,sort_order,listing_status,published_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'provisional',CURRENT_TIMESTAMP)
+              is_featured,is_new,sort_order,listing_status,published_at,created_at,updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'provisional',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
           `).bind(
             slug,name,"",area,"","","",instagram,genre,"",description,
             null,null,null,"",0,1,"","",
@@ -5071,8 +5071,8 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           INSERT INTO shops (
             slug,name,name_kana,area,address,hours,holiday,instagram,genre,features,description,
             budget_min,budget_max,seats,phone,is_recruiting,is_published,image_url,image_key,
-            is_featured,is_new,sort_order,listing_status,published_at
-          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE NULL END)
+            is_featured,is_new,sort_order,listing_status,published_at,created_at,updated_at
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE NULL END,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
         `).bind(
           s.slug,s.name,s.name_kana,s.area,s.address,s.hours,s.holiday,s.instagram,s.genre,s.features,s.description,
           s.budget_min,s.budget_max,s.seats,s.phone,s.is_recruiting,s.is_published,s.image_url,s.image_key,
@@ -5450,9 +5450,9 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         const r=await env.DB.prepare(`
           INSERT INTO shops (
             slug,name,area,address,hours,holiday,instagram,genre,features,description,
-            budget_min,budget_max,seats,phone,is_recruiting,is_published,is_new,listing_status,published_at
+            budget_min,budget_max,seats,phone,is_recruiting,is_published,is_new,listing_status,published_at,created_at,updated_at
           )
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,'published',CURRENT_TIMESTAMP)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,'published',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
         `).bind(
           s.slug,s.name,s.area,s.address,s.hours,s.holiday,s.instagram,s.genre,s.features,s.description,
           s.budget_min,s.budget_max,s.seats,t(sub.phone,80),s.is_recruiting,1
