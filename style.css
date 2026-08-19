@@ -624,3 +624,34 @@ div[id]{
 @media(max-width:720px){
   .detail-photo{min-height:250px}
 }
+
+/* ===== ver1.30 Smart Public Home ===== */
+.kin-home-smart-v130 .container{width:min(1120px,calc(100% - 28px))}
+.kin-smart-hero{padding:28px 0 18px;background:radial-gradient(circle at 88% 0%,rgba(112,34,44,.18),transparent 34%),radial-gradient(circle at 8% 0%,rgba(228,185,79,.08),transparent 30%),#070d14;border-bottom:1px solid rgba(228,185,79,.12)}
+.kin-smart-hero .kicker,.kin-smart-section .kicker,.kin-smart-owner .kicker{margin:0 0 6px;color:#e4b94f;font-size:10px;font-weight:900;letter-spacing:.22em}
+.kin-smart-hero h1{margin:0;font-family:"Yu Mincho",serif;font-size:clamp(34px,6vw,58px);line-height:1.13;letter-spacing:-.02em}
+.kin-smart-hero h1 span{color:#e4bd59}.kin-smart-lead{margin:12px 0 0;color:#93a0ab;font-size:13px;line-height:1.7}
+.kin-smart-search{margin-top:18px;padding:11px;border:1px solid #2c3946;border-radius:16px;background:rgba(9,16,23,.9)}
+.kin-smart-search-row{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.kin-smart-search select,.kin-smart-search input{width:100%;min-height:44px;border:1px solid #344250;border-radius:11px;background:#081019;color:#fff;padding:0 11px;font:inherit;font-size:13px}
+.kin-smart-search input{margin-top:7px}.kin-smart-search button{width:100%;min-height:45px;margin-top:8px;border:0;border-radius:11px;background:#e4b94f;color:#111;font-size:13px;font-weight:900}
+.kin-smart-chips{display:flex;gap:7px;overflow-x:auto;padding:10px 0 1px;scrollbar-width:none}.kin-smart-chips::-webkit-scrollbar{display:none}
+.kin-smart-chips a{flex:0 0 auto;padding:7px 10px;border:1px solid #34414e;border-radius:999px;background:#0a1118;color:#a9b3bd;font-size:10px;white-space:nowrap}
+.kin-smart-section{padding:27px 0}.kin-smart-soft{background:#081018}
+.kin-smart-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:12px}
+.kin-smart-head h2,.kin-smart-owner h2{margin:0;font-family:"Yu Mincho",serif;font-size:26px;line-height:1.15}.kin-smart-head>a{color:#e4b94f;font-size:11px;font-weight:900}
+.kin-smart-shop-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}.kin-smart-shop-grid .shop-card{border-radius:15px}.kin-smart-shop-grid .shop-photo{height:145px}.kin-smart-shop-grid .shop-body{padding:12px}
+.kin-smart-moods{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.kin-smart-moods a{min-height:100px;padding:13px;border:1px solid #2d3945;border-radius:14px;background:#0b141e}
+.kin-smart-moods span{display:block;color:#fff;font-family:"Yu Mincho",serif;font-size:24px;margin-bottom:11px}.kin-smart-moods b{display:block;font-size:13px}.kin-smart-moods small{color:#7f8a95;font-size:10px}
+.kin-smart-news{display:grid;gap:6px}.kin-smart-news .news-item{min-height:0;padding:10px 11px;border-radius:11px;grid-template-columns:52px 1fr 14px}
+.kin-smart-owner{padding:18px 0 28px}.kin-smart-owner>.container{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px;border:1px solid rgba(228,185,79,.28);border-radius:17px;background:linear-gradient(135deg,rgba(120,30,43,.12),rgba(228,185,79,.04)),#0b131c}.kin-smart-owner p{margin:4px 0 0;color:#89949f;font-size:11px}
+@media(max-width:760px){
+ .site-header .header-inner{min-height:68px}.brand img{width:48px;height:48px}.brand-jp{font-size:16px}.brand-en{font-size:8px}.header-actions .pill-btn{padding:11px 16px;font-size:11px}
+ .kin-home-smart-v130 .container{width:calc(100% - 22px)}.kin-smart-hero{padding:21px 0 14px}.kin-smart-hero h1{font-size:32px}.kin-smart-lead{font-size:11px}
+ .kin-smart-search{margin-top:14px;padding:9px}.kin-smart-search select,.kin-smart-search input{min-height:42px;font-size:12px}.kin-smart-search button{min-height:43px}
+ .kin-smart-section{padding:22px 0}.kin-smart-head h2,.kin-smart-owner h2{font-size:22px}
+ .kin-smart-shop-grid{display:flex!important;overflow-x:auto;gap:9px;scroll-snap-type:x mandatory;scrollbar-width:none}.kin-smart-shop-grid::-webkit-scrollbar{display:none}.kin-smart-shop-grid .shop-card{flex:0 0 78%;max-width:300px;scroll-snap-align:start}
+ .kin-smart-moods{display:flex;overflow-x:auto;gap:8px;scrollbar-width:none}.kin-smart-moods::-webkit-scrollbar{display:none}.kin-smart-moods a{flex:0 0 116px;min-height:88px;padding:11px}
+ .kin-smart-owner>.container{align-items:flex-start;flex-direction:column;padding:15px}.kin-smart-owner .gold-btn{width:100%;text-align:center}
+}
+@media(max-width:390px){.kin-smart-hero h1{font-size:29px}.kin-smart-search-row{grid-template-columns:1fr}.kin-smart-shop-grid .shop-card{flex-basis:84%}}
