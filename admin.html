@@ -258,15 +258,89 @@ body{background:var(--bar-bg)}
 }
 </style>
 
+
+<style id="kin-dashboard-clean-v120">
+.kin-hero-compact{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:10px!important;
+  min-height:0!important;
+  padding:10px 12px!important;
+  margin:8px 0!important;
+  border:1px solid #2f3a45!important;
+  border-radius:12px!important;
+  background:#0b1219!important;
+}
+.kin-hero-copy{min-width:0}
+.kin-hero-copy>b{display:block;font-size:.8rem;line-height:1.2}
+.kin-hero-copy>span{display:block;margin-top:2px;color:#7f8a95;font-size:.6rem;letter-spacing:.05em}
+.kin-hero-copy strong{color:#e8ba48}
+.kin-hero-compact #status{white-space:nowrap;font-size:.61rem}
+
+.ops-status-strip{
+  margin:8px 0!important;
+  padding:7px!important;
+  gap:6px!important;
+}
+.ops-status-strip>div{padding:6px 7px!important}
+.ops-status-strip span{font-size:.58rem!important}
+.ops-status-strip strong{font-size:.72rem!important}
+#opsReloadAllBtn{min-height:32px!important;padding:0 8px!important;font-size:.62rem!important}
+
+.kin-dashboard-compact{
+  padding:10px!important;
+  margin:8px 0 12px!important;
+  border-radius:12px!important;
+}
+.kin-quick-head{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px
+}
+.kin-quick-head b{font-size:.72rem}
+.kin-quick-head span{font-size:.58rem;color:#7f8a95}
+.kin-quick-grid{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px
+}
+.kin-quick-btn{
+  min-width:0;min-height:62px;padding:8px 6px!important;
+  display:grid!important;grid-template-columns:auto 1fr;grid-template-rows:auto auto;
+  column-gap:6px;align-items:center;text-align:left!important;
+  border:1px solid #34404c!important;border-radius:10px!important;
+  background:#101821!important;color:#fff!important
+}
+.kin-quick-btn>span{grid-row:1/3;font-size:1rem}
+.kin-quick-btn>b{font-size:.68rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kin-quick-btn>small{font-size:.55rem;color:#88939e;white-space:nowrap}
+.kin-quick-btn strong{color:#e8ba48}
+.kin-quick-auto{border-color:#715a22!important;background:rgba(232,186,72,.07)!important}
+.kin-mini-stats{display:flex;gap:6px;margin-top:7px}
+.kin-mini-stats span{
+  padding:4px 7px;border-radius:999px;background:#091018;color:#7f8a95;font-size:.55rem
+}
+.kin-mini-stats b{color:#e8ba48}
+
+@media(max-width:650px){
+  .kin-hero-compact{padding:8px 10px!important}
+  .kin-quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:5px!important}
+  .kin-quick-btn{
+    min-height:58px!important;padding:7px 5px!important;
+    grid-template-columns:1fr!important;grid-template-rows:auto auto auto!important;
+    text-align:center!important;justify-items:center!important;row-gap:1px
+  }
+  .kin-quick-btn>span{grid-row:auto;font-size:.92rem}
+  .kin-quick-btn>b{font-size:.62rem;width:100%}
+  .kin-quick-btn>small{font-size:.5rem;width:100%;overflow:hidden;text-overflow:ellipsis}
+}
+</style>
+
 </head><body>
 <header class="top"><div class="topin"><div class="brand"><img src="logo-emblem.jpg"><div><b>熊本居酒屋ナビ 管理</b><small>KUMAMOTO IZAKAYA NAVI</small></div></div><div class="top-actions"><a class="ghost" href="/" target="_blank">サイト</a><button id="logout" class="ghost">ログアウト</button></div></div></header>
 <main class="wrap">
 
-<div class="hero">
-  <div>
-    <h1>管理画面</h1>
-    <p>BAR NAVIと同じ配置・操作感で、居酒屋ナビを管理できます。</p>
-    <span class="kin-version-badge">KUMAMOTO IZAKAYA NAVI <b>ver1.19</b></span>
+<div class="hero kin-hero-compact">
+  <div class="kin-hero-copy">
+    <b>熊本居酒屋ナビ 管理</b>
+    <span>KIN ADMIN <strong>ver1.20</strong></span>
   </div>
   <small id="status" class="meta">読込中...</small>
 </div>
@@ -293,48 +367,25 @@ body{background:var(--bar-bg)}
   <button type="button" id="opsReloadAllBtn">すべて更新</button>
 </div>
 
-<section class="admin-dashboard-v108" id="adminDashboard">
-  <div class="dashboard-head">
-    <div>
-      <p class="meta" style="color:#e6bd55;font-weight:900;letter-spacing:.08em">DASHBOARD</p>
-      <h2>今日はここから</h2>
-      <p>よく使う操作を大きく表示しています。</p>
-    </div>
+<section class="admin-dashboard-v108 kin-dashboard-compact" id="adminDashboard">
+  <div class="kin-quick-head">
+    <b>よく使う操作</b>
+    <span>必要な機能へすぐ移動</span>
   </div>
-
-  <div class="dashboard-primary-grid">
-    <button type="button" class="dashboard-primary-card" data-go-tab="shops">
-      <span class="dashboard-icon">🏮</span>
-      <span class="dashboard-copy"><b>店舗を管理</b><small><strong id="dashShopCount">-</strong> 店舗</small></span>
-      <span class="dashboard-arrow">›</span>
+  <div class="kin-quick-grid">
+    <button type="button" class="kin-quick-btn kin-quick-auto" data-go-tab="leads">
+      <span>⚡</span><b>自動開拓</b><small><strong id="dashLeadCount">-</strong> 候補</small>
     </button>
-    <button type="button" class="dashboard-primary-card" data-go-tab="leads">
-      <span class="dashboard-icon">🔎</span>
-      <span class="dashboard-copy"><b>新しい居酒屋を開拓</b><small>自動検索・手動登録</small></span>
-      <span class="dashboard-arrow">›</span>
+    <button type="button" class="kin-quick-btn" data-go-tab="shops">
+      <span>🏮</span><b>店舗管理</b><small><strong id="dashShopCount">-</strong> 店舗</small>
     </button>
-    <button type="button" class="dashboard-primary-card" data-go-tab="submissions">
-      <span class="dashboard-icon">📥</span>
-      <span class="dashboard-copy"><b>申込み・申請を確認</b><small>未対応 <strong id="dashSubCount">-</strong> 件</small></span>
-      <span class="dashboard-arrow">›</span>
+    <button type="button" class="kin-quick-btn" data-go-tab="submissions">
+      <span>📥</span><b>申込み確認</b><small>未対応 <strong id="dashSubCount">-</strong></small>
     </button>
   </div>
-
-  <details class="dashboard-more">
-    <summary>その他の管理メニュー</summary>
-    <div class="dashboard-more-grid">
-      <button type="button" data-go-tab="jobs">求人を管理</button>
-      <button type="button" data-go-tab="requests">店舗申請を確認</button>
-      <button type="button" data-go-tab="sitesettings">サイト設定</button>
-      <button type="button" data-go-tab="siteupdate">サイト更新</button>
-      <button type="button" data-go-tab="access">アクセスを見る</button>
-    </div>
-  </details>
-
-  <div class="dashboard-status-line">
-    <span>公開中 <b id="dashPubCount">-</b></span>
+  <div class="kin-mini-stats" aria-label="管理状況">
+    <span>公開 <b id="dashPubCount">-</b></span>
     <span>求人 <b id="dashJobCount">-</b></span>
-    <span>新規開拓 <b id="dashLeadCount">-</b></span>
   </div>
 </section>
 
@@ -572,12 +623,19 @@ loadGithubStatus();
 
 
 function switchAdminTab(name){
+  const panel=$("panel-"+name);
+  if(!panel){
+    console.warn("KIN tab not found:",name);
+    return false;
+  }
   document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("active",x.dataset.tab===name));
   document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));
-  const panel=$("panel-"+name); if(panel) panel.classList.add("active");
+  panel.classList.add("active");
   const more=$("adminMorePanel"), toggle=$("adminMoreToggle");
-  if(more) more.hidden=true; if(toggle) toggle.classList.remove("active");
-  window.scrollTo({top:0,behavior:"smooth"});
+  if(more) more.hidden=true;
+  if(toggle) toggle.classList.remove("active");
+  requestAnimationFrame(()=>panel.scrollIntoView({behavior:"smooth",block:"start"}));
+  return true;
 }
 
 // ver1.18: Safari-safe menu routing without details/summary
@@ -589,13 +647,24 @@ if(adminMoreToggle&&adminMorePanel){
     adminMoreToggle.classList.toggle("active",!adminMorePanel.hidden);
   });
 }
-document.querySelectorAll("[data-tab]").forEach(btn=>btn.addEventListener("click",()=>switchAdminTab(btn.dataset.tab)));
-document.querySelectorAll("[data-fixed-tab]").forEach(btn=>{
-  const go=()=>switchAdminTab(btn.dataset.fixedTab);
-  btn.addEventListener("click",go);
-  btn.addEventListener("touchend",e=>{e.preventDefault();go();},{passive:false});
-});
-document.querySelectorAll("[data-go-tab]").forEach(btn=>btn.addEventListener("click",()=>switchAdminTab(btn.dataset.goTab)));
+// ver1.20: iPhone/Safariでも確実に反応する委譲型ルーティング
+document.addEventListener("click",e=>{
+  const btn=e.target.closest("[data-tab],[data-fixed-tab],[data-go-tab]");
+  if(!btn)return;
+  const tab=btn.dataset.tab||btn.dataset.fixedTab||btn.dataset.goTab;
+  if(!tab)return;
+  e.preventDefault();
+  switchAdminTab(tab);
+},{capture:true});
+
+document.addEventListener("touchend",e=>{
+  const btn=e.target.closest("[data-go-tab]");
+  if(!btn)return;
+  const tab=btn.dataset.goTab;
+  if(!tab)return;
+  e.preventDefault();
+  switchAdminTab(tab);
+},{passive:false});
 opsReloadAllBtn.onclick=()=>loadAll();
 
 logout.onclick=async()=>{try{await api("/api/admin/logout",{method:"POST"})}catch{}localStorage.removeItem("kin_admin_token");location.href="/admin-login"}
