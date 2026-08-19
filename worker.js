@@ -2229,6 +2229,38 @@ async function refreshMissingShopImages(env,{limit=20,afterId=0}={}){
   return {ok:true,checked:rows.length,updated,unchanged,failed,next_after_id:next,has_more:!!more};
 }
 
+
+async function backfillMissingShopImages(env,{maxBatches=5,batchSize=20}={}){
+  let after=0;
+  let checked=0;
+  let updated=[];
+  let unchanged=[];
+  let failed=[];
+  const batches=Math.max(1,Math.min(Number(maxBatches)||5,10));
+  const size=Math.max(1,Math.min(Number(batchSize)||20,30));
+
+  for(let i=0;i<batches;i++){
+    const r=await refreshMissingShopImages(env,{limit:size,afterId:after});
+    checked+=Number(r.checked||0);
+    if(Array.isArray(r.updated))updated.push(...r.updated);
+    if(Array.isArray(r.unchanged))unchanged.push(...r.unchanged);
+    if(Array.isArray(r.failed))failed.push(...r.failed);
+
+    const next=Number(r.next_after_id||after);
+    if(!r.has_more || next<=after)break;
+    after=next;
+  }
+
+  return {
+    ok:true,
+    checked,
+    updated,
+    unchanged,
+    failed,
+    updated_count:updated.length
+  };
+}
+
 function googlePlacesConfig(env){
   return {apiKey:t(env.GOOGLE_PLACES_API_KEY,2000)};
 }
@@ -3975,7 +4007,16 @@ ${urls.map(x=>`  <url>
         SELECT * FROM shops WHERE is_published=1
         ORDER BY is_featured DESC, COALESCE(updated_at,published_at,created_at) DESC, sort_order ASC, id DESC
       `).all();
-      return json({ok:true,shops:(r.results||[]).map(publicShopRow)});
+
+      const rows=r.results||[];
+      if(rows.some(s=>!String(s.image_url||"").trim())){
+        ctx.waitUntil(
+          backfillMissingShopImages(env,{maxBatches:2,batchSize:20})
+            .catch(e=>console.error("public image backfill failed",e))
+        );
+      }
+
+      return json({ok:true,shops:rows.map(publicShopRow)});
     }
 
 
@@ -4729,7 +4770,15 @@ ${urls.map(x=>`  <url>
           if(result?.created?.length){
             ctx.waitUntil(notifyCreatedShops(env,result.created,"自動開拓").catch(e=>console.error("new shop alert failed",e)));
           }
-          return json(result,{headers:{"Cache-Control":"no-store"}});
+
+          // 自動開拓完了後に画像なし店舗をまとめて補完。
+          // 新規店舗だけでなく、過去に登録済みの店舗も対象。
+          ctx.waitUntil(
+            backfillMissingShopImages(env,{maxBatches:5,batchSize:20})
+              .catch(e=>console.error("auto image backfill failed",e))
+          );
+
+          return json({...result,image_backfill_started:true},{headers:{"Cache-Control":"no-store"}});
         }catch(e){
           console.error("auto-discover failed",e);
           return json({
@@ -4748,6 +4797,15 @@ ${urls.map(x=>`  <url>
           return json(result,{headers:{"Cache-Control":"no-store"}});
         }catch(e){
           return json({ok:false,error:"REFRESH_IMAGES_FAILED",message:String(e?.message||e).slice(0,500)},{status:500});
+        }
+      }
+
+      if(url.pathname==="/api/admin/leads/refresh-images-all" && request.method==="POST"){
+        try{
+          const result=await backfillMissingShopImages(env,{maxBatches:10,batchSize:30});
+          return json(result,{headers:{"Cache-Control":"no-store"}});
+        }catch(e){
+          return json({ok:false,error:"REFRESH_IMAGES_ALL_FAILED",message:String(e?.message||e).slice(0,500)},{status:500});
         }
       }
 
