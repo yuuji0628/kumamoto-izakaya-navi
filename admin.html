@@ -363,6 +363,9 @@ body{background:var(--bar-bg)}
 }
 </style>
 
+<style id="kin-button-fix-v125">
+button,[role="button"],.kin-quick-btn{touch-action:manipulation;-webkit-tap-highlight-color:rgba(232,186,72,.12)}
+</style>
 </head><body>
 <header class="top"><div class="topin"><div class="brand"><img src="logo-emblem.jpg"><div><b>熊本居酒屋ナビ 管理</b><small>KUMAMOTO IZAKAYA NAVI</small></div></div><div class="top-actions"><a class="ghost" href="/" target="_blank">サイト</a><button id="logout" class="ghost">ログアウト</button></div></div></header>
 <main class="wrap">
@@ -370,7 +373,7 @@ body{background:var(--bar-bg)}
 <div class="hero kin-hero-compact">
   <div class="kin-hero-copy">
     <b>熊本居酒屋ナビ 管理</b>
-    <span>KIN ADMIN <strong>ver1.24</strong></span>
+    <span>KIN ADMIN <strong>ver1.25</strong></span>
   </div>
   <small id="status" class="meta">読込中...</small>
 </div>
@@ -623,7 +626,7 @@ function renderAll(sum){
   const leadCount=sum.new_leads??leads.filter(x=>x.status==="new").length;
   const pendingCount=subs.filter(x=>x.status==="pending").length;
 
-  // ver1.24: コンパクト化で削除された旧カウンターを参照しない
+  // ver1.25: コンパクト化で削除された旧カウンターを参照しない
   const setText=(id,value)=>{const el=$(id);if(el)el.textContent=value};
   setText("opsShopCount",shopCount);
   setText("opsSubCount",pendingCount);
@@ -710,54 +713,57 @@ if(adminMoreToggle&&adminMorePanel){
     adminMoreToggle.classList.toggle("active",!adminMorePanel.hidden);
   });
 }
-// ver1.24: iPhone/Safariでも確実に反応する委譲型ルーティング
+// ver1.25: iPhone/Safariでも確実に反応する委譲型ルーティング
 document.addEventListener("click",e=>{
-  const btn=e.target.closest("[data-tab],[data-fixed-tab],[data-go-tab]");
+  const btn=e.target.closest?.("[data-tab],[data-fixed-tab],[data-go-tab]");
   if(!btn)return;
   const tab=btn.dataset.tab||btn.dataset.fixedTab||btn.dataset.goTab;
   if(!tab)return;
   e.preventDefault();
   switchAdminTab(tab);
-},{capture:true});
+});
+const opsReloadAllBtnEl=$("opsReloadAllBtn");
+if(opsReloadAllBtnEl)opsReloadAllBtnEl.addEventListener("click",()=>loadAll());
 
-document.addEventListener("touchend",e=>{
-  const btn=e.target.closest("[data-go-tab]");
-  if(!btn)return;
-  const tab=btn.dataset.goTab;
-  if(!tab)return;
-  e.preventDefault();
-  switchAdminTab(tab);
-},{passive:false});
-opsReloadAllBtn.onclick=()=>loadAll();
-
-logout.onclick=async()=>{try{await api("/api/admin/logout",{method:"POST"})}catch{}localStorage.removeItem("kin_admin_token");location.href="/admin-login"}
+const logoutEl=$("logout");
+if(logoutEl)logoutEl.addEventListener("click",async()=>{
+  try{await api("/api/admin/logout",{method:"POST"})}catch{}
+  localStorage.removeItem("kin_admin_token");
+  location.href="/admin-login";
+});
 loadAll();
 
 async function loadSiteSettings(){
   try{
     const d=await api("/api/admin/site-settings"),s=d.settings||{};
-    siteHeroTitle.value=s.hero_title||"";
-    siteHeroSubtitle.value=s.hero_subtitle||"";
-    siteNoticeTitle.value=s.notice_title||"";
-    siteNoticeText.value=s.notice_text||"";
-    siteCtaTitle.value=s.cta_title||"";
-    siteCtaText.value=s.cta_text||"";
-    siteSettingsMsg.textContent="最新設定を読み込みました";
-  }catch(e){siteSettingsMsg.textContent="読み込みに失敗しました"}
+    if($("siteHeroTitle"))$("siteHeroTitle").value=s.hero_title||"";
+    if($("siteHeroSubtitle"))$("siteHeroSubtitle").value=s.hero_subtitle||"";
+    if($("siteNoticeTitle"))$("siteNoticeTitle").value=s.notice_title||"";
+    if($("siteNoticeText"))$("siteNoticeText").value=s.notice_text||"";
+    if($("siteCtaTitle"))$("siteCtaTitle").value=s.cta_title||"";
+    if($("siteCtaText"))$("siteCtaText").value=s.cta_text||"";
+    if($("siteSettingsMsg"))$("siteSettingsMsg").textContent="最新設定を読み込みました";
+  }catch(e){if($("siteSettingsMsg"))$("siteSettingsMsg").textContent="読み込みに失敗しました"}
 }
-reloadSiteSettings.onclick=loadSiteSettings;
-saveSiteSettings.onclick=async()=>{
-  saveSiteSettings.disabled=true;saveSiteSettings.textContent="保存中...";
+const reloadSiteSettingsEl=$("reloadSiteSettings");
+if(reloadSiteSettingsEl)reloadSiteSettingsEl.addEventListener("click",loadSiteSettings);
+
+const saveSiteSettingsEl=$("saveSiteSettings");
+if(saveSiteSettingsEl)saveSiteSettingsEl.addEventListener("click",async()=>{
+  saveSiteSettingsEl.disabled=true;saveSiteSettingsEl.textContent="保存中...";
   try{
     await api("/api/admin/site-settings",{method:"PUT",body:JSON.stringify({
-      hero_title:siteHeroTitle.value,hero_subtitle:siteHeroSubtitle.value,
-      notice_title:siteNoticeTitle.value,notice_text:siteNoticeText.value,
-      cta_title:siteCtaTitle.value,cta_text:siteCtaText.value
+      hero_title:$("siteHeroTitle")?.value||"",hero_subtitle:$("siteHeroSubtitle")?.value||"",
+      notice_title:$("siteNoticeTitle")?.value||"",notice_text:$("siteNoticeText")?.value||"",
+      cta_title:$("siteCtaTitle")?.value||"",cta_text:$("siteCtaText")?.value||""
     })});
-    siteSettingsMsg.textContent="✅ 保存しました。公開サイトを再読み込みすると反映されます。";
-  }catch(e){siteSettingsMsg.textContent="保存失敗: "+e.message}
-  finally{saveSiteSettings.disabled=false;saveSiteSettings.textContent="サイト設定を保存"}
-};
+    const msg=$("siteSettingsMsg");if(msg)msg.textContent="✅ 保存しました。公開サイトを再読み込みすると反映されます。";
+  }catch(e){
+    const msg=$("siteSettingsMsg");if(msg)msg.textContent="保存失敗: "+e.message;
+  }finally{
+    saveSiteSettingsEl.disabled=false;saveSiteSettingsEl.textContent="サイト設定を保存";
+  }
+});
 loadSiteSettings();
 
 
@@ -782,37 +788,47 @@ function ghRenderUploadList(){
 function ghSetFiles(list){
   ghSelectedFiles=[...list];ghRenderUploadList();ghUploadResult.style.display="none"
 }
-ghUploadFiles.addEventListener("change",e=>ghSetFiles(e.target.files||[]));
+const ghUploadFilesEl=$("ghUploadFiles"),ghUploadStartEl=$("ghUploadStart"),ghUploadApproveEl=$("ghUploadApprove");
+const ghUploadClearEl=$("ghUploadClear"),ghFileDropEl=$("ghFileDrop"),ghReloadEl=$("ghReload");
 
-ghUploadFiles.addEventListener("change",()=>{
-  ghUploadStart.disabled=true;
-  ghUploadApprove.dataset.approved="";
-  ghUploadApprove.textContent="このファイルで更新する";
+if(ghUploadFilesEl)ghUploadFilesEl.addEventListener("change",e=>{
+  ghSetFiles(e.target.files||[]);
+  if(ghUploadStartEl)ghUploadStartEl.disabled=true;
+  if(ghUploadApproveEl){ghUploadApproveEl.dataset.approved="";ghUploadApproveEl.textContent="このファイルで更新する"}
 });
-ghUploadApprove.onclick=()=>{
+if(ghUploadApproveEl)ghUploadApproveEl.addEventListener("click",()=>{
   if(!ghSelectedFiles.length){toast("先に更新ファイルを選択してください");return}
-  ghUploadApprove.dataset.approved="1";
-  ghUploadApprove.textContent="✓ 確認しました";
-  ghUploadStart.disabled=false;
-};
-
-ghUploadClear.onclick=()=>{
-  ghSelectedFiles=[];ghUploadFiles.value="";ghRenderUploadList();ghUploadStart.disabled=true;ghUploadApprove.dataset.approved="";ghUploadApprove.textContent="このファイルで更新する"
-};
-ghFileDrop.addEventListener("dragover",e=>{e.preventDefault();ghFileDrop.classList.add("dragover")});
-ghFileDrop.addEventListener("dragleave",()=>ghFileDrop.classList.remove("dragover"));
-ghFileDrop.addEventListener("drop",e=>{
-  e.preventDefault();ghFileDrop.classList.remove("dragover");
-  if(e.dataTransfer?.files?.length){ghSetFiles(e.dataTransfer.files);ghUploadStart.disabled=true;ghUploadApprove.dataset.approved="";ghUploadApprove.textContent="このファイルで更新する"}
+  ghUploadApproveEl.dataset.approved="1";
+  ghUploadApproveEl.textContent="✓ 確認しました";
+  if(ghUploadStartEl)ghUploadStartEl.disabled=false;
 });
-ghReload.onclick=()=>loadGithubStatus();
+if(ghUploadClearEl)ghUploadClearEl.addEventListener("click",()=>{
+  ghSelectedFiles=[];
+  if(ghUploadFilesEl)ghUploadFilesEl.value="";
+  ghRenderUploadList();
+  if(ghUploadStartEl)ghUploadStartEl.disabled=true;
+  if(ghUploadApproveEl){ghUploadApproveEl.dataset.approved="";ghUploadApproveEl.textContent="このファイルで更新する"}
+});
+if(ghFileDropEl){
+  ghFileDropEl.addEventListener("dragover",e=>{e.preventDefault();ghFileDropEl.classList.add("dragover")});
+  ghFileDropEl.addEventListener("dragleave",()=>ghFileDropEl.classList.remove("dragover"));
+  ghFileDropEl.addEventListener("drop",e=>{
+    e.preventDefault();ghFileDropEl.classList.remove("dragover");
+    if(e.dataTransfer?.files?.length){
+      ghSetFiles(e.dataTransfer.files);
+      if(ghUploadStartEl)ghUploadStartEl.disabled=true;
+      if(ghUploadApproveEl){ghUploadApproveEl.dataset.approved="";ghUploadApproveEl.textContent="このファイルで更新する"}
+    }
+  });
+}
+if(ghReloadEl)ghReloadEl.addEventListener("click",()=>loadGithubStatus());
 
-ghUploadStart.onclick=async()=>{
+if(ghUploadStartEl)ghUploadStartEl.addEventListener("click",async()=>{
   if(!ghSelectedFiles.length){toast("更新ファイルを選択してください");return}
-  if(ghUploadApprove.dataset.approved!=="1"){toast("先に確認ボタンを押してください");return}
+  if(ghUploadApproveEl?.dataset.approved!=="1"){toast("先に確認ボタンを押してください");return}
   if(!confirm(`${ghSelectedFiles.length}個のファイルをGitHubへ反映しますか？`))return;
 
-  ghUploadStart.disabled=true;ghUploadStart.textContent="反映中...";
+  ghUploadStartEl.disabled=true;ghUploadStartEl.textContent="反映中...";
   ghUploadResult.style.display="none";
   let ok=0,ng=0;const details=[];
   try{
@@ -843,9 +859,9 @@ ghUploadStart.onclick=async()=>{
     ghUploadResult.innerHTML=`反映完了：${ok}件 / 失敗：${ng}件<br>${details.map(esc).join("<br>")}<br><br>Cloudflareの自動デプロイが開始されます。`;
     toast("ファイル更新が完了しました");
   }finally{
-    ghUploadStart.disabled=false;ghUploadStart.textContent="選択したファイルを反映"
+    ghUploadStartEl.disabled=false;ghUploadStartEl.textContent="選択したファイルを反映"
   }
-};
+});
 
 </script>
 <script id="kin-bar-parity-v119-js">
@@ -939,7 +955,8 @@ window.kinLoadSchedule=async function(){
 };
 
 document.addEventListener("click",async e=>{
-  if(e.target?.id==="kinAutoDiscoverBtn"){
+  const actionTarget=e.target.closest?.("button");
+  if(actionTarget?.id==="kinAutoDiscoverBtn"){
     const btn=e.target,box=document.getElementById("kinAutoProgress"),bar=document.getElementById("kinAutoProgressBar"),
       pct=document.getElementById("kinAutoProgressPct"),txt=document.getElementById("kinAutoProgressText"),st=document.getElementById("kinAutoStatus");
     if(!confirm("熊本県内の居酒屋を自動検索してKIN独自掲載します。開始しますか？"))return;
@@ -953,8 +970,8 @@ document.addEventListener("click",async e=>{
     finally{btn.disabled=false}
     return;
   }
-  if(e.target?.id==="kinReloadAutoListed"){await window.kinLoadAutoListed();return}
-  if(e.target?.id==="kinReloadAlerts"){await window.kinLoadAlerts();return}
+  if(actionTarget?.id==="kinReloadAutoListed"){await window.kinLoadAutoListed();return}
+  if(actionTarget?.id==="kinReloadAlerts"){await window.kinLoadAlerts();return}
 
   const dm=e.target.closest("[data-kin-dm]");
   if(dm){
@@ -981,8 +998,8 @@ document.addEventListener("click",async e=>{
     await window.kinLoadAlerts();await loadAll();return;
   }
 
-  if(e.target?.id==="kinRefreshMissingBtn"){
-    const st=document.getElementById("kinMaintenanceStatus");e.target.disabled=true;
+  if(actionTarget?.id==="kinRefreshMissingBtn"){
+    const st=document.getElementById("kinMaintenanceStatus");actionTarget.disabled=true;
     try{
       let after=0,checked=0,updated=0;
       for(let i=0;i<30;i++){
@@ -993,12 +1010,12 @@ document.addEventListener("click",async e=>{
       }
       st.textContent=`情報不足補完完了：${checked}店舗確認 / ${updated}店舗更新`;
       await window.kinLoadAutoListed();
-    }catch(err){st.textContent=err.message}finally{e.target.disabled=false}
+    }catch(err){st.textContent=err.message}finally{actionTarget.disabled=false}
     return;
   }
 
-  if(e.target?.id==="kinRefreshInstagramBtn"){
-    const st=document.getElementById("kinMaintenanceStatus");e.target.disabled=true;
+  if(actionTarget?.id==="kinRefreshInstagramBtn"){
+    const st=document.getElementById("kinMaintenanceStatus");actionTarget.disabled=true;
     try{
       let after=0,checked=0,updated=0,candidates=0;
       for(let i=0;i<30;i++){
@@ -1009,13 +1026,13 @@ document.addEventListener("click",async e=>{
       }
       st.textContent=`Instagram補完完了：${updated}店舗を自動保存 / ${candidates}件は要確認`;
       await window.kinLoadAutoListed();
-    }catch(err){st.textContent=err.message}finally{e.target.disabled=false}
+    }catch(err){st.textContent=err.message}finally{actionTarget.disabled=false}
     return;
   }
 
-  if(e.target?.id==="kinRefreshImagesBtn"){
+  if(actionTarget?.id==="kinRefreshImagesBtn"){
     const st=document.getElementById("kinMaintenanceStatus");
-    e.target.disabled=true;
+    actionTarget.disabled=true;
     try{
       let after=0,checked=0,updated=0;
       for(let i=0;i<30;i++){
@@ -1035,13 +1052,13 @@ document.addEventListener("click",async e=>{
     }catch(err){
       st.textContent="画像補完エラー: "+err.message;
     }finally{
-      e.target.disabled=false;
+      actionTarget.disabled=false;
     }
     return;
   }
 
-  if(e.target?.id==="kinCheckClosedBtn"){
-    const st=document.getElementById("kinMaintenanceStatus");e.target.disabled=true;
+  if(actionTarget?.id==="kinCheckClosedBtn"){
+    const st=document.getElementById("kinMaintenanceStatus");actionTarget.disabled=true;
     try{
       let after=0,checked=0,closed=0;
       for(let i=0;i<30;i++){
@@ -1052,18 +1069,18 @@ document.addEventListener("click",async e=>{
       }
       st.textContent=`閉業チェック完了：${checked}店舗 / ${closed}件`;
       await window.kinLoadAlerts();
-    }catch(err){st.textContent=err.message}finally{e.target.disabled=false}
+    }catch(err){st.textContent=err.message}finally{actionTarget.disabled=false}
     return;
   }
 
-  if(e.target?.id==="kinScheduleSave"){
+  if(actionTarget?.id==="kinScheduleSave"){
     const times=[1,2,3].map(i=>document.getElementById("kinSchedule"+i).value);
-    e.target.disabled=true;document.getElementById("kinScheduleStatus").textContent="反映中...";
+    actionTarget.disabled=true;document.getElementById("kinScheduleStatus").textContent="反映中...";
     try{
       const d=await api("/api/admin/auto-schedule",{method:"PUT",body:JSON.stringify({times_jst:times})});
       document.getElementById("kinScheduleStatus").textContent=`✓ ${d.times_jst.join(" / ")}（日本時間）でGitHubへ反映しました`;
     }catch(err){document.getElementById("kinScheduleStatus").textContent="更新エラー: "+err.message}
-    finally{e.target.disabled=false}
+    finally{actionTarget.disabled=false}
   }
 });
 
