@@ -8,75 +8,70 @@
 .card{width:min(100%,460px);background:var(--card);border:1px solid var(--line);border-radius:24px;padding:25px;box-shadow:0 25px 70px rgba(0,0,0,.35)}
 .brand{text-align:center;margin-bottom:24px}.brand img{width:84px;height:84px;object-fit:cover;border-radius:20px;margin:auto}.brand h1{font-family:"Yu Mincho",serif;font-size:24px;margin:12px 0 3px}.brand p{color:var(--gold);font-size:9px;letter-spacing:.2em;margin:0}
 .notice{padding:12px 14px;border:1px solid #5f4e29;border-radius:12px;color:#ddc172;background:rgba(228,185,79,.05);font-size:12px;margin-bottom:16px}
-label{display:block;color:#b9c2ca;font-size:12px;font-weight:800;margin:12px 0 6px}input{width:100%;height:50px;border:1px solid #344250;border-radius:12px;background:#08111a;color:#fff;padding:0 13px;font-size:16px;outline:none}
+label{display:block;color:#b9c2ca;font-size:12px;font-weight:800;margin:12px 0 6px}
+input{width:100%;height:50px;border:1px solid #344250;border-radius:12px;background:#08111a;color:#fff;padding:0 13px;font-size:16px;outline:none}
 button{width:100%;height:52px;border:0;border-radius:13px;background:linear-gradient(135deg,#efc45a,#c9982f);font-weight:900;color:#17120b;margin-top:18px;font-size:15px}
 .msg{min-height:20px;margin-top:12px;font-size:12px;color:#e8c96f}.sub{color:var(--muted);font-size:11px;line-height:1.7;margin-top:14px}.back{display:block;text-align:center;margin-top:17px;color:#8e99a4;font-size:12px}
 </style></head><body>
 <div class="card">
-  <div class="brand"><img src="logo-emblem.jpg" alt=""><h1>熊本居酒屋ナビ 管理画面</h1><p>KUMAMOTO IZAKAYA NAVI</p></div>
-  <div id="setupNotice" class="notice" style="display:none">初回セットアップです。管理者メールアドレスとパスワードを登録してください。</div>
-  <form id="form">
-    <label>メールアドレス</label><input id="email" type="email" autocomplete="username" required>
-    <label>パスワード</label><input id="password" type="password" autocomplete="current-password" required>
-    <label id="confirmLabel" style="display:none">パスワード確認</label><input id="confirm" type="password" autocomplete="new-password" style="display:none">
-    <button id="submit">ログイン</button>
-  </form>
-  <div id="msg" class="msg"></div>
-  <div class="sub" id="hint">管理者のみアクセスできます。</div><div class="sub" style="text-align:center;opacity:.55">ver1.12</div>
-  <a class="back" href="/">← サイトへ戻る</a>
+<div class="brand"><img src="logo-emblem.jpg" alt=""><h1>熊本居酒屋ナビ 管理画面</h1><p>KUMAMOTO IZAKAYA NAVI</p></div>
+<div id="setupNotice" class="notice" style="display:none">初回セットアップです。管理者メールアドレスとパスワードを登録してください。</div>
+<form id="form">
+<label>メールアドレス</label><input id="email" type="email" autocomplete="username" required>
+<label>パスワード</label><input id="password" type="password" autocomplete="current-password" required>
+<label id="confirmLabel" style="display:none">パスワード確認</label><input id="confirm" type="password" autocomplete="new-password" style="display:none">
+<button id="submit" type="submit">ログイン</button>
+</form>
+<div id="msg" class="msg"></div><div class="sub" id="hint">管理者のみアクセスできます。</div>
+<div class="sub" style="text-align:center;opacity:.55">ver1.13</div><a class="back" href="/">← サイトへ戻る</a>
 </div>
 <script>
 let needsSetup=false;
-const msg=t=>document.getElementById("msg").textContent=t||"";
+const $=id=>document.getElementById(id), form=$("form"), setupNotice=$("setupNotice"), submit=$("submit"), hint=$("hint");
+const msg=t=>$("msg").textContent=t||"";
+async function parseResponse(r){const raw=await r.text();try{return JSON.parse(raw)}catch{return {ok:false,error:"HTTP_"+r.status,detail:raw.slice(0,160)}}}
 async function status(){
-  try{
-    const savedToken=localStorage.getItem("kin_admin_token")||"";
-    const headers={"cache-control":"no-cache"};
-    if(savedToken)headers["authorization"]="Bearer "+savedToken;
-    const r=await fetch("/api/admin/status?v=112&t="+Date.now(),{cache:"no-store",headers}),d=await r.json();
-
-    // ログイン済みの端末ではログイン画面を自動スキップ
-    if(savedToken && d.authenticated){
-      location.replace("/admin");
-      return;
-    }
-    // 期限切れ・無効なトークンだけ削除
-    if(savedToken && !d.authenticated){
-      localStorage.removeItem("kin_admin_token");
-    }
-
-    needsSetup=!!d.needs_setup;
-    if(needsSetup){
-      setupNotice.style.display="block";
-      document.getElementById("confirmLabel").style.display="block";
-      document.getElementById("confirm").style.display="block";
-      document.getElementById("confirm").required=true;
-      submit.textContent="管理者を作成";
-      hint.textContent="パスワードは8文字以上で設定してください。登録後は通常のログイン画面になります。";
-    }
-  }catch{msg("接続を確認できません。少し待って再読み込みしてください。")}
+ try{
+  const savedToken=localStorage.getItem("kin_admin_token")||"";
+  const headers={"cache-control":"no-cache"};
+  if(savedToken)headers.authorization="Bearer "+savedToken;
+  const r=await fetch("/api/admin/status?v=113&t="+Date.now(),{cache:"no-store",headers});
+  const d=await parseResponse(r);
+  if(savedToken&&d.authenticated){location.replace("/admin");return}
+  if(savedToken&&!d.authenticated)localStorage.removeItem("kin_admin_token");
+  needsSetup=!!d.needs_setup;
+  if(needsSetup){
+   setupNotice.style.display="block";$("confirmLabel").style.display="block";$("confirm").style.display="block";$("confirm").required=true;
+   submit.textContent="管理者を作成";hint.textContent="パスワードは8文字以上で設定してください。登録後は通常のログイン画面になります。"
+  }
+ }catch(e){msg("接続を確認できません。少し待って再読み込みしてください。")}
 }
 form.addEventListener("submit",async e=>{
-  e.preventDefault();msg("");
-  const email=document.getElementById("email").value.trim();
-  const password=document.getElementById("password").value;
-  try{
-    if(needsSetup){
-      if(password.length<8)return msg("パスワードは8文字以上にしてください。");
-      if(password!==document.getElementById("confirm").value)return msg("確認用パスワードが一致しません。");
-      const r=await fetch("/api/admin/bootstrap?v=109&t="+Date.now(),{method:"POST",headers:{"content-type":"application/json","cache-control":"no-cache"},body:JSON.stringify({email,password})});
-      const raw=await r.text();
-      let d={}; try{d=JSON.parse(raw)}catch{d={ok:false,error:"HTTP_"+r.status,detail:raw.slice(0,120)}}
-      if(!r.ok||!d.ok)return msg("管理者作成に失敗しました: "+(d.error||"UNKNOWN")+(d.detail?" / "+d.detail:""));
-      needsSetup=false;setupNotice.style.display="none";document.getElementById("confirmLabel").style.display="none";document.getElementById("confirm").style.display="none";document.getElementById("confirm").required=false;submit.textContent="ログイン";
-      msg("管理者を作成しました。続けてログインしてください。");return;
-    }
-    const r=await fetch("/api/admin/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,password})});
-    const d=await r.json();
-    if(!r.ok||!d.ok)return msg("メールアドレスまたはパスワードが違います。");
-    localStorage.setItem("kin_admin_token",d.token);
-    location.href="/admin";
-  }catch{msg("通信に失敗しました。")}
+ e.preventDefault();msg("");submit.disabled=true;
+ const email=$("email").value.trim(),password=$("password").value;
+ try{
+  if(needsSetup){
+   if(password.length<8){msg("パスワードは8文字以上にしてください。");return}
+   if(password!==$("confirm").value){msg("確認用パスワードが一致しません。");return}
+   const r=await fetch("/api/admin/bootstrap?v=113&t="+Date.now(),{method:"POST",headers:{"content-type":"application/json","cache-control":"no-cache"},body:JSON.stringify({email,password})});
+   const d=await parseResponse(r);
+   if(!r.ok||!d.ok){msg("管理者作成に失敗しました: "+(d.error||"UNKNOWN"));return}
+   needsSetup=false;setupNotice.style.display="none";$("confirmLabel").style.display="none";$("confirm").style.display="none";$("confirm").required=false;
+   submit.textContent="ログイン";msg("管理者を作成しました。続けてログインしてください。");return
+  }
+  const r=await fetch("/api/admin/login?v=113&t="+Date.now(),{method:"POST",headers:{"content-type":"application/json","cache-control":"no-cache"},cache:"no-store",body:JSON.stringify({email,password})});
+  const d=await parseResponse(r);
+  if(!r.ok||!d.ok){
+   if(d.error==="ADMIN_NOT_CONFIGURED"||d.error==="NOT_CONFIGURED"){
+    needsSetup=true;setupNotice.style.display="block";$("confirmLabel").style.display="block";$("confirm").style.display="block";$("confirm").required=true;
+    submit.textContent="管理者を作成";msg("管理者設定を再登録してください。");return
+   }
+   msg("メールアドレスまたはパスワードが違います。"+(d.error?"（"+d.error+"）":""));return
+  }
+  if(!d.token){msg("ログイン応答にトークンがありません。");return}
+  localStorage.setItem("kin_admin_token",d.token);location.replace("/admin")
+ }catch(e){msg("通信に失敗しました。再読み込みしてもう一度お試しください。")}
+ finally{submit.disabled=false}
 });
 status();
 </script></body></html>
