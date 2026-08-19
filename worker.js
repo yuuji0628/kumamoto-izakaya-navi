@@ -160,7 +160,10 @@ async function mergeSubmissionIntoShop(env,sub,shopId){
       name=?,area=?,address=?,hours=?,holiday=?,instagram=?,genre=?,features=?,description=?,
       budget_min=?,budget_max=?,seats=?,phone=?,is_recruiting=?,
       listing_status='published',is_published=1,is_new=1,
-      published_at=COALESCE(published_at,CURRENT_TIMESTAMP),
+      published_at=CASE
+        WHEN COALESCE(listing_status,'published')='provisional' THEN CURRENT_TIMESTAMP
+        ELSE COALESCE(published_at,CURRENT_TIMESTAMP)
+      END,
       updated_at=CURRENT_TIMESTAMP
     WHERE id=?
   `).bind(
@@ -191,6 +194,7 @@ const KBN_GITHUB_EDITABLE_FILES = [
   "script.js",
   "admin.html",
   "worker.js",
+  "wrangler.jsonc",
   "bars.html",
   "shop.html",
   "jobs.html",
@@ -200,7 +204,7 @@ const KBN_GITHUB_EDITABLE_FILES = [
 function kbnGithubConfig(env){
   return {
     owner: t(env.GITHUB_OWNER || "yuuji0628", 100),
-    repo: t(env.GITHUB_REPO || "kumamoto-bar-navi", 120),
+    repo: t(env.GITHUB_REPO || "kumamoto-izakaya-navi", 120),
     branch: t(env.GITHUB_BRANCH || "main", 100),
     token: String(env.GITHUB_TOKEN || "").trim()
   };
@@ -211,7 +215,7 @@ function kbnGithubHeaders(token){
     "Accept":"application/vnd.github+json",
     "Authorization":`Bearer ${token}`,
     "X-GitHub-Api-Version":"2022-11-28",
-    "User-Agent":"KUMAMOTO-BAR-NAVI-ADMIN"
+    "User-Agent":"KUMAMOTO-IZAKAYA-NAVI-ADMIN"
   };
 }
 
@@ -229,6 +233,105 @@ function kbnBase64ToUtf8(value){
   const bin=atob(String(value||"").replace(/\n/g,""));
   const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
   return new TextDecoder().decode(bytes);
+}
+
+
+function kbnNormalizeJstTime(value){
+  const m=String(value||"").trim().match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if(!m)return "";
+  return `${m[1]}:${m[2]}`;
+}
+
+function kbnJstTimeToCron(value){
+  const time=kbnNormalizeJstTime(value);
+  if(!time)return "";
+  const [h,m]=time.split(":").map(Number);
+  const utcMinutes=(h*60+m-9*60+24*60)%(24*60);
+  const uh=Math.floor(utcMinutes/60);
+  const um=utcMinutes%60;
+  return `${um} ${uh} * * *`;
+}
+
+function kbnCronToJstTime(cron){
+  const m=String(cron||"").trim().match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/);
+  if(!m)return "";
+  const minute=Number(m[1]),hour=Number(m[2]);
+  if(minute<0||minute>59||hour<0||hour>23)return "";
+  const jstMinutes=(hour*60+minute+9*60)%(24*60);
+  const jh=Math.floor(jstMinutes/60);
+  const jm=jstMinutes%60;
+  return `${String(jh).padStart(2,"0")}:${String(jm).padStart(2,"0")}`;
+}
+
+function kbnSortJstTimes(times){
+  return [...times].sort((a,b)=>{
+    const [ah,am]=a.split(":").map(Number);
+    const [bh,bm]=b.split(":").map(Number);
+    return ah*60+am-(bh*60+bm);
+  });
+}
+
+async function kbnReadWranglerFromGithub(env){
+  const c=kbnGithubConfig(env);
+  const d=await kbnGithubApi(
+    env,
+    `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc?ref=${encodeURIComponent(c.branch)}`
+  );
+  if(Array.isArray(d)||d.type!=="file")throw new Error("WRANGLER_NOT_A_FILE");
+  const content=kbnBase64ToUtf8(d.content||"");
+  let config;
+  try{config=JSON.parse(content)}
+  catch{throw new Error("WRANGLER_JSON_PARSE_FAILED")}
+  return {config,sha:d.sha,content,c};
+}
+
+async function kbnUpdateAutoSchedule(env,timesJst){
+  const normalized=timesJst.map(kbnNormalizeJstTime);
+  if(normalized.length!==3||normalized.some(x=>!x)){
+    const e=new Error("SCHEDULE_REQUIRES_3_VALID_JST_TIMES");
+    e.status=400;
+    throw e;
+  }
+  if(new Set(normalized).size!==3){
+    const e=new Error("SCHEDULE_TIMES_MUST_BE_UNIQUE");
+    e.status=400;
+    throw e;
+  }
+
+  const times=kbnSortJstTimes(normalized);
+  const crons=times.map(kbnJstTimeToCron);
+  const {config,sha,c}=await kbnReadWranglerFromGithub(env);
+
+  config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
+  config.triggers.crons=crons;
+  config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
+  config.vars.KBN_CONFIG_VERSION="1.76";
+  config.vars.KBN_SCHEDULE_UPDATED_AT=new Date().toISOString();
+
+  const content=JSON.stringify(config,null,2)+"\n";
+  const result=await kbnGithubApi(
+    env,
+    `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,
+    {
+      method:"PUT",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({
+        message:`admin: update auto discovery schedule ${times.join(" / ")} JST`,
+        content:kbnUtf8ToBase64(content),
+        sha,
+        branch:c.branch
+      })
+    }
+  );
+
+  return {
+    ok:true,
+    times_jst:times,
+    crons,
+    commit_sha:result.commit?.sha||"",
+    commit_url:result.commit?.html_url||"",
+    message:"予約時間をGitHubへ反映しました。Cloudflareの自動デプロイ後にCronが更新されます。"
+  };
 }
 
 async function kbnGithubApi(env,path,init={}){
@@ -292,12 +395,12 @@ async function notifyNewSubmission(env, x){
       "Content-Type":"application/json"
     },
     body:JSON.stringify({
-      from:"KUMAMOTO BAR NAVI <onboarding@resend.dev>",
+      from:"KUMAMOTO IZAKAYA NAVI <onboarding@resend.dev>",
       to:["kumamotobarnavi@gmail.com"],
-      subject:`【KBN】新しい掲載申込み：${t(x.shop_name,80)||"店舗名未入力"}`,
+      subject:`【KIN】新しい掲載申込み：${t(x.shop_name,80)||"店舗名未入力"}`,
       html:`<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111">
         <h2>新しい掲載申込みが届きました</h2>
-        <p>KUMAMOTO BAR NAVI の掲載フォームから新しい申込みがありました。</p>
+        <p>KUMAMOTO IZAKAYA NAVI の掲載フォームから新しい申込みがありました。</p>
         <table style="border-collapse:collapse;width:100%;max-width:700px">${htmlRows}</table>
         <p style="margin-top:24px">管理画面の「申込み」タブから確認してください。</p>
       </body></html>`
@@ -373,9 +476,9 @@ async function notifyOwnerRequest(env, shop, requestType, payload, autoApplied=f
       "Content-Type":"application/json"
     },
     body:JSON.stringify({
-      from:"KUMAMOTO BAR NAVI <onboarding@resend.dev>",
+      from:"KUMAMOTO IZAKAYA NAVI <onboarding@resend.dev>",
       to:["kumamotobarnavi@gmail.com"],
-      subject:`【KBN】${typeLabel}：${t(shop?.name,80)||"店舗名未設定"}`,
+      subject:`【KIN】${typeLabel}：${t(shop?.name,80)||"店舗名未設定"}`,
       html:`<!doctype html>
       <html>
       <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111;line-height:1.6">
@@ -398,7 +501,7 @@ async function notifyOwnerRequest(env, shop, requestType, payload, autoApplied=f
         </p>
 
         <p>
-          <a href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/admin-login"
+          <a href="https://kumamoto-izakaya-navi.rrwpvwmz8p.workers.dev/admin-login"
              style="display:inline-block;padding:12px 18px;background:#111;color:#fff;text-decoration:none;border-radius:8px">
              管理画面を開く
           </a>
@@ -572,7 +675,7 @@ function extractJobTitle(text,shopName){
   if(/ホールスタッフ|ホール/.test(s))return "ホールスタッフ募集";
   if(/スタッフ募集|スタッフ/.test(s))return "スタッフ募集";
   if(/アルバイト|バイト/.test(s))return "アルバイト募集";
-  return `${String(shopName||"店舗").replace(/^【KBN独自掲載】/,"").trim()} スタッフ募集`;
+  return `${String(shopName||"店舗").replace(/^【KIN独自掲載】/,"").trim()} スタッフ募集`;
 }
 
 function extractJobFeatures(text){
@@ -663,7 +766,7 @@ async function searchJobCandidatesForShops(env,{limit=5}={}){
 
   for(const shop of shops){
     try{
-      const cleanName=String(shop.name||"").replace(/^【KBN独自掲載】/,"").replace(/\s*[（(]\s*@[A-Za-z0-9._]+\s*[）)]\s*$/,"").trim();
+      const cleanName=String(shop.name||"").replace(/^【KIN独自掲載】/,"").replace(/\s*[（(]\s*@[A-Za-z0-9._]+\s*[）)]\s*$/,"").trim();
       const q=`"${cleanName}" ${shop.area||"熊本"} 求人 スタッフ募集 アルバイト バーテンダー`;
 
       const sr=await serpApiGoogleSearch(env,{q,num:10});
@@ -734,21 +837,13 @@ async function searchInstagramLeads(env,{area,type,start=1}){
   }
 
   const typeWord={
-    izakaya:"居酒屋",
-    yakitori:"焼き鳥 串焼き 居酒屋",
-    seafood:"海鮮 刺身 居酒屋",
-    basashi:"馬刺し 居酒屋",
-    local:"熊本 郷土料理 居酒屋",
-    robata:"炉端焼き 居酒屋",
-    taishu:"大衆酒場 居酒屋",
-    creative:"創作料理 居酒屋",
-    washoku:"和食 居酒屋",
-    yakiniku:"焼肉 ホルモン 居酒屋",
-    oden:"おでん 居酒屋",
-    gyoza:"餃子 中華 居酒屋"
+    izakaya:"居酒屋", yakitori:"焼き鳥", seafood:"海鮮居酒屋", horse:"馬刺し 居酒屋",
+    local:"郷土料理 居酒屋", motsu:"もつ鍋 居酒屋", kushi:"串焼き 居酒屋", private:"個室 居酒屋",
+    nomihodai:"飲み放題 居酒屋", robata:"炉端 居酒屋", sake:"日本酒 居酒屋", shochu:"焼酎 居酒屋",
+    yakiniku:"焼肉 居酒屋"
   }[type]||"居酒屋";
 
-  const q=`site:instagram.com ${area} ${typeWord} 熊本県`;
+  const q=`site:instagram.com ${area} ${typeWord} 熊本`;
   const page=Math.max(0,Math.floor((Math.max(1,Number(start)||1)-1)/10));
 
   const u=new URL("https://serpapi.com/search.json");
@@ -838,20 +933,7 @@ async function ownerShop(request,env){
 
 
 const KBN_AREAS=["熊本市", "八代市", "人吉市", "荒尾市", "水俣市", "玉名市", "山鹿市", "菊池市", "宇土市", "上天草市", "宇城市", "阿蘇市", "天草市", "合志市", "美里町", "玉東町", "南関町", "長洲町", "和水町", "大津町", "菊陽町", "南小国町", "小国町", "産山村", "高森町", "西原村", "南阿蘇村", "御船町", "嘉島町", "益城町", "甲佐町", "山都町", "氷川町", "芦北町", "津奈木町", "錦町", "多良木町", "湯前町", "水上村", "相良村", "五木村", "山江村", "球磨村", "あさぎり町", "苓北町"];
-const KBN_LEAD_TYPES=[
-  ["izakaya","居酒屋"],
-  ["yakitori","焼き鳥・串焼き"],
-  ["seafood","海鮮居酒屋"],
-  ["basashi","馬刺し"],
-  ["local","郷土料理"],
-  ["robata","炉端焼き"],
-  ["taishu","大衆酒場"],
-  ["creative","創作居酒屋"],
-  ["washoku","和食居酒屋"],
-  ["yakiniku","焼肉・ホルモン"],
-  ["oden","おでん"],
-  ["gyoza","餃子・中華居酒屋"]
-];
+const KBN_LEAD_TYPES=[["izakaya","居酒屋"],["yakitori","焼き鳥"],["seafood","海鮮居酒屋"],["horse","馬刺し"],["local","郷土料理"],["motsu","もつ鍋"],["kushi","串焼き"],["private","個室居酒屋"],["nomihodai","飲み放題"],["robata","炉端"],["sake","日本酒"],["shochu","焼酎"],["yakiniku","焼肉"]];
 
 async function ensureLeadDiscoveryTables(env){
   await env.DB.prepare(`
@@ -890,97 +972,94 @@ async function autoDiscoveryPairs(env,limit=4){
   for(const area of KBN_AREAS)for(const [type,label] of KBN_LEAD_TYPES)
     p.push({area,type,label,last:m.get(`${area}||${type}`)||""});
   p.sort((a,b)=>(!a.last&&b.last)?-1:(a.last&&!b.last)?1:String(a.last).localeCompare(String(b.last)));
-  return p.slice(0,Math.max(1,Math.min(Number(limit)||12,48)));
+  return p.slice(0,Math.max(1,Math.min(Number(limit)||4,8)));
 }
 
 function likelyBar(x){
-  const s=`${x.title||""} ${x.snippet||""} ${x.address||""}`.toLowerCase();
-  const good=[
-    "居酒屋","酒場","焼き鳥","やきとり","串焼","串揚","海鮮","刺身","浜焼",
-    "馬刺","郷土料理","炉端","ろばた","大衆","創作料理","和食","割烹",
-    "焼肉","ホルモン","おでん","餃子","もつ鍋","鉄板焼","鳥料理","鶏料理",
-    "飲み放題","宴会","日本酒","焼酎"
-  ];
-  const bad=[
-    "美容","ネイル","エステ","不動産","建設","病院","歯科","整体","学校","塾",
-    "求人情報","ニュース","美容室","サロン","ホテル","旅館","スーパー","コンビニ",
-    "barbershop","理容"
-  ];
+  const s=`${x.title||""} ${x.snippet||""}`.toLowerCase();
+  const good=["居酒屋","izakaya","焼き鳥","やきとり","海鮮","刺身","馬刺し","郷土料理","もつ鍋","串焼き","串揚げ","炉端","日本酒","焼酎","飲み放題","個室","焼肉","酒場","大衆酒場"];
+  const bad=["美容","ネイル","エステ","不動産","建設","病院","歯科","整体","学校","塾","求人情報","ニュース","カフェ","喫茶","スイーツ","ホテル"];
   return !bad.some(w=>s.includes(w)) && good.some(w=>s.includes(w));
 }
 
 
 function extractPriceInfo(text){
   const raw=String(text||"");
-  const s=raw
+
+  let s=raw
     .replace(/[，,]/g,"")
     .replace(/１/g,"1").replace(/２/g,"2").replace(/３/g,"3")
     .replace(/４/g,"4").replace(/５/g,"5").replace(/６/g,"6")
     .replace(/７/g,"7").replace(/８/g,"8").replace(/９/g,"9")
     .replace(/０/g,"0");
 
+  // Mask non-price numbers before extracting prices.
+  s=s
+    .replace(/https?:\/\/\S+/gi," ")
+    .replace(/\bwww\.\S+/gi," ")
+    .replace(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/gi," ")
+    .replace(/(?:TEL|電話|PHONE|FAX|予約|お問い合わせ)?\s*[:：]?\s*(?:\+81[\s-]?(?:0)?|0)\d{1,4}[\s\-‐‑–—ー]?\d{1,4}[\s\-‐‑–—ー]?\d{3,4}\b/gi," ")
+    .replace(/\b0\d{1,4}\s*\(\s*0?\d{1,4}\s*\)\s*\d{3,4}\b/g," ")
+    .replace(/〒?\s*\d{3}[\s\-‐‑–—ー]\d{4}\b/g," ")
+    .replace(/\b(?:[01]?\d|2[0-9])[:：]\d{2}(?::\d{2})?\b/g," ")
+    .replace(/\b(?:[01]?\d|2[0-9])時(?:\d{1,2}分)?\b/g," ")
+    .replace(/\b20\d{2}[\/.\-年]\d{1,2}(?:[\/.\-月]\d{1,2}日?)?\b/g," ")
+    .replace(/\b\d{1,2}[\/.\-]\d{1,2}\b/g," ")
+    .replace(/\b(?:緯度|経度|ID|店番号|店舗番号|郵便番号|フォロワー|followers?|口コミ|reviews?)\s*[:：]?\s*\d+(?:\.\d+)?\b/gi," ");
+
   const prices=[];
 
   function addPrice(v,score=1){
     const n=Number(String(v||"").replace(/[^\d]/g,""));
-    if(!Number.isFinite(n))return;
-    if(n<100 || n>100000)return;
+    if(!Number.isFinite(n) || n<100 || n>100000)return;
     prices.push({value:n,score});
   }
 
-  // Strong signals: explicit currency marks / 円.
   const strongPatterns=[
     /[¥￥]\s*([0-9]{2,6})/g,
     /([0-9]{2,6})\s*円/g,
     /([0-9]{2,6})\s*(?:yen|JPY)/gi
   ];
-
   for(const p of strongPatterns){
-    let m;
-    while((m=p.exec(s)))addPrice(m[1],3);
+    let m; while((m=p.exec(s)))addPrice(m[1],5);
   }
 
-  // Strong contextual price phrases, even if 円 is omitted.
-  const contextualPatterns=[
-    /(?:料金|価格|price|チャージ|charge|セット料金|set料金|飲み放題|フリータイム|入場料|テーブルチャージ|席料|TC|SC|男性|女性|メンズ|レディース)\s*[:：]?\s*[¥￥]?\s*([0-9]{2,6})/gi,
-    /(?:お一人様|1名|一人)\s*[:：]?\s*[¥￥]?\s*([0-9]{2,6})/gi,
-    /(?:from|starting at)\s*[¥￥]?\s*([0-9]{2,6})/gi
+  const strongRanges=[
+    /[¥￥]\s*([0-9]{2,6})\s*(?:〜|～|~|-|–|—|to)\s*[¥￥]?\s*([0-9]{2,6})(?:\s*円)?/gi,
+    /([0-9]{2,6})\s*円\s*(?:〜|～|~|-|–|—|to)\s*([0-9]{2,6})\s*円?/gi
   ];
-
-  for(const p of contextualPatterns){
-    let m;
-    while((m=p.exec(s)))addPrice(m[1],2);
+  for(const p of strongRanges){
+    let m; while((m=p.exec(s))){addPrice(m[1],5);addPrice(m[2],5);}
   }
 
-  // Ranges: 1500〜3000 / ¥1500-3000 / 1500円〜3000円.
-  const rangePatterns=[
-    /[¥￥]?\s*([0-9]{2,6})\s*(?:円)?\s*(?:〜|～|~|-|–|—|to)\s*[¥￥]?\s*([0-9]{2,6})\s*(?:円)?/gi
+  const labels="料金|価格|予算|平均予算|price|チャージ|charge|セット料金|set料金|飲み放題|フリータイム|入場料|テーブルチャージ|席料|TC|SC|男性|女性|メンズ|レディース|お一人様|1名|一人";
+  const contextual=[
+    new RegExp(`(?:${labels})\\s*[:：]?\\s*[¥￥]?\\s*([0-9]{2,6})(?:\\s*円)?`,"gi"),
+    /(?:from|starting at)\s*[¥￥]?\s*([0-9]{2,6})(?:\s*円)?/gi
   ];
-
-  for(const p of rangePatterns){
-    let m;
-    while((m=p.exec(s))){
-      addPrice(m[1],2);
-      addPrice(m[2],2);
-    }
+  for(const p of contextual){
+    let m; while((m=p.exec(s)))addPrice(m[1],4);
   }
+
+  const contextualRange=new RegExp(
+    `(?:${labels})\\s*[:：]?\\s*[¥￥]?\\s*([0-9]{2,6})\\s*(?:円)?\\s*(?:〜|～|~|-|–|—|to)\\s*[¥￥]?\\s*([0-9]{2,6})(?:\\s*円)?`,
+    "gi"
+  );
+  let rm;
+  while((rm=contextualRange.exec(s))){addPrice(rm[1],4);addPrice(rm[2],4);}
 
   if(!prices.length)return {min:null,max:null};
-
-  // Prefer values with explicit currency/price context.
   const maxScore=Math.max(...prices.map(x=>x.score));
-  const candidates=prices
-    .filter(x=>x.score===maxScore)
-    .map(x=>x.value)
-    .filter((v,i,a)=>a.indexOf(v)===i)
-    .sort((a,b)=>a-b);
+  const candidates=prices.filter(x=>x.score===maxScore).map(x=>x.value)
+    .filter((v,i,a)=>a.indexOf(v)===i).sort((a,b)=>a-b);
 
   if(!candidates.length)return {min:null,max:null};
-
-  return {
-    min:candidates[0],
-    max:candidates.length>1?candidates[candidates.length-1]:candidates[0]
-  };
+  if(candidates.length>1){
+    const min=candidates[0],max=candidates[candidates.length-1];
+    if(max/min>50)return {min:null,max:null};
+    return {min,max};
+  }
+  return {min:candidates[0],max:candidates[0]};
 }
 
 function extractHoursInfo(text){
@@ -1154,188 +1233,1840 @@ async function repairExistingIndependentListingAreas(env,{limit=100}={}){
   };
 }
 
-function extractPublicMetadata(lead){
-  const text=`${lead.title||""} ${lead.snippet||""}`;
-  const price=extractPriceInfo(text);
+
+
+function normalizePlaceName(value){
+  return String(value||"")
+    .toLowerCase()
+    .replace(/^【kbn独自掲載】/i,"")
+    .replace(/\s*[（(]\s*@[a-z0-9._]+\s*[）)]\s*$/i,"")
+    .replace(/\s+@[a-z0-9._]+\s*$/i,"")
+    .replace(/\b(bar|cafe|club|lounge|snack|pub)\b/gi,"")
+    .replace(/[・･\-‐‑–—―ー_.,，。'’"“”「」『』【】()[\]{}]/g,"")
+    .replace(/\s+/g,"")
+    .trim();
+}
+
+function placeNameMatchScore(a,b){
+  const x=normalizePlaceName(a),y=normalizePlaceName(b);
+  if(!x||!y)return 0;
+  if(x===y)return 100;
+  if(x.includes(y)||y.includes(x)){
+    const short=Math.min(x.length,y.length),long=Math.max(x.length,y.length);
+    return Math.round(72+24*(short/long));
+  }
+  const grams=s=>{
+    const arr=Array.from(s),out=new Set();
+    if(arr.length===1){out.add(arr[0]);return out;}
+    for(let i=0;i<arr.length-1;i++)out.add(arr[i]+arr[i+1]);
+    return out;
+  };
+  const gx=grams(x),gy=grams(y);
+  let hit=0;
+  for(const g of gx)if(gy.has(g))hit++;
+  return Math.round((2*hit/Math.max(1,gx.size+gy.size))*100);
+}
+
+function osmTags(place){
+  return place&&typeof place.tags==="object"?place.tags:{};
+}
+
+function osmPlaceName(place){
+  const tags=osmTags(place);
+  return String(tags.name||tags["name:ja"]||tags.brand||tags.operator||"").trim();
+}
+
+function osmAddress(place){
+  const t=osmTags(place);
+  if(t["addr:full"])return String(t["addr:full"]).trim();
+  const parts=[
+    t["addr:province"],
+    t["addr:city"]||t["addr:town"]||t["addr:village"],
+    t["addr:suburb"]||t["addr:quarter"]||t["addr:neighbourhood"],
+    t["addr:street"],
+    t["addr:housenumber"]
+  ].filter(Boolean);
+  return parts.join(" ").replace(/\s+/g," ").trim();
+}
+
+function osmPhone(place){
+  const t=osmTags(place);
+  return String(t["contact:phone"]||t.phone||t["contact:mobile"]||"").trim();
+}
+
+function osmWebsite(place){
+  const t=osmTags(place);
+  return String(t["contact:website"]||t.website||t.url||"").trim();
+}
+
+function osmInstagram(place){
+  const t=osmTags(place);
+  const raw=String(
+    t["contact:instagram"]||t.instagram||t["social_media"]||""
+  ).trim();
+  if(raw){
+    const h=kbnHandle(raw);
+    if(h)return `https://www.instagram.com/${h}/`;
+  }
+  const website=osmWebsite(place);
+  const h=kbnHandle(website);
+  return h?`https://www.instagram.com/${h}/`:"";
+}
+
+function osmHours(place){
+  return String(osmTags(place).opening_hours||"").trim();
+}
+
+function osmHoliday(place){
+  const h=osmHours(place);
+  if(!h)return "";
+  const dayMap={Mo:"月",Tu:"火",We:"水",Th:"木",Fr:"金",Sa:"土",Su:"日"};
+  const closed=[];
+  for(const part of h.split(";")){
+    if(!/\boff\b|closed|休/i.test(part))continue;
+    const m=part.trim().match(/\b(Mo|Tu|We|Th|Fr|Sa|Su)\b/g);
+    if(m)closed.push(...m.map(x=>dayMap[x]||x));
+  }
+  return [...new Set(closed)].map(x=>`${x}曜日`).join("・");
+}
+
+function osmFeatures(place){
+  const t=osmTags(place); const vals=[];
+  const amenity=String(t.amenity||""); const cuisine=String(t.cuisine||"");
+  if(amenity==="restaurant")vals.push("居酒屋・飲食店");
+  if(/japanese|izakaya|yakitori/i.test(cuisine))vals.push("和食・居酒屋");
+  if(/seafood|fish/i.test(cuisine))vals.push("海鮮");
+  if(/bbq|yakiniku/i.test(cuisine))vals.push("焼肉");
+  if(t.smoking==="yes"||t.smoking==="separated")vals.push("喫煙可");
+  if(t.outdoor_seating==="yes")vals.push("テラス席");
+  if(t.wheelchair==="yes")vals.push("車椅子対応");
+  return [...new Set(vals)].join("、");
+}
+
+function osmPlaceLooksLikeBar(place){
+  const t=osmTags(place); const a=String(t.amenity||"").toLowerCase();
+  const n=String(t.name||"").toLowerCase(); const c=String(t.cuisine||"").toLowerCase();
+  return a==="restaurant" && (/(居酒屋|酒場|焼き鳥|海鮮|馬刺|郷土|もつ鍋|串|炉端|焼肉|izakaya|yakitori)/i.test(n+" "+c) || /japanese|izakaya|yakitori|seafood|bbq|yakiniku/i.test(c));
+}
+
+function osmAreaHint(place){
+  const t=osmTags(place);
+  return String(
+    t["addr:city"]||t["addr:town"]||t["addr:village"]||
+    t["addr:suburb"]||t["addr:quarter"]||""
+  ).trim();
+}
+
+function osmPlaceScore(place,{name="",area=""}={}){
+  let score=placeNameMatchScore(name,osmPlaceName(place));
+  const addr=osmAddress(place);
+  const areaHint=osmAreaHint(place);
+  if(area && (addr.includes(area)||areaHint.includes(area)))score+=18;
+  else if(addr.includes("熊本")||areaHint.includes("熊本"))score+=8;
+  if(osmPlaceLooksLikeBar(place))score+=12;
+  if(osmPhone(place))score+=2;
+  if(osmHours(place))score+=2;
+  return score;
+}
+
+async function ensureOpenDataCacheTable(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS open_data_cache(
+      cache_key TEXT PRIMARY KEY,
+      payload TEXT NOT NULL,
+      fetched_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+}
+
+async function getOpenDataCache(env,key,maxAgeHours=24){
+  await ensureOpenDataCacheTable(env);
+  const row=await env.DB.prepare(`
+    SELECT payload,fetched_at FROM open_data_cache
+    WHERE cache_key=?
+      AND datetime(fetched_at)>=datetime('now',?)
+  `).bind(String(key),`-${Math.max(1,Number(maxAgeHours)||24)} hours`).first();
+  if(!row?.payload)return null;
+  try{return JSON.parse(row.payload)}catch{return null}
+}
+
+async function setOpenDataCache(env,key,value){
+  await ensureOpenDataCacheTable(env);
+  await env.DB.prepare(`
+    INSERT INTO open_data_cache(cache_key,payload,fetched_at)
+    VALUES(?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(cache_key) DO UPDATE SET
+      payload=excluded.payload,
+      fetched_at=CURRENT_TIMESTAMP
+  `).bind(String(key),JSON.stringify(value)).run();
+}
+
+async function fetchKumamotoOsmBars(env,{force=false}={}){
+  const key="osm_kumamoto_izakaya_v2";
+  if(!force){
+    const cached=await getOpenDataCache(env,key,24);
+    if(Array.isArray(cached))return {ok:true,source:"cache",places:cached};
+  }
+
+  const query=`
+[out:json][timeout:40];
+area["name"="熊本県"]["boundary"="administrative"]->.a;
+(
+  nwr(area.a)["amenity"="restaurant"]["cuisine"~"japanese|izakaya|yakitori|seafood|bbq|yakiniku",i];
+);
+out center tags;
+  `.trim();
+
+  const endpoints=[
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter"
+  ];
+
+  let lastError="OVERPASS_UNAVAILABLE";
+  for(const endpoint of endpoints){
+    try{
+      const r=await fetch(endpoint,{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/x-www-form-urlencoded;charset=UTF-8",
+          "User-Agent":"KUMAMOTO-IZAKAYA-NAVI/1.79"
+        },
+        body:"data="+encodeURIComponent(query)
+      });
+      const text=await r.text();
+      if(!r.ok){lastError=`OVERPASS_HTTP_${r.status}`;continue;}
+      const d=JSON.parse(text);
+      const places=Array.isArray(d?.elements)?d.elements.filter(osmPlaceLooksLikeBar):[];
+      await setOpenDataCache(env,key,places);
+      return {ok:true,source:"overpass",places};
+    }catch(e){
+      lastError=String(e?.message||e||lastError);
+    }
+  }
+
+  const stale=await getOpenDataCache(env,key,24*30);
+  if(Array.isArray(stale))return {ok:true,source:"stale_cache",places:stale};
+  return {ok:false,error:lastError,places:[]};
+}
+
+
+function geoapifyConfig(env){
+  return {apiKey:t(env.GEOAPIFY_API_KEY,1000)};
+}
+
+function geoFeatureProps(feature){
+  return feature&&typeof feature.properties==="object"?feature.properties:{};
+}
+
+function geoName(feature){
+  const p=geoFeatureProps(feature);
+  return String(p.name||p.address_line1||"").trim();
+}
+
+function geoAddress(feature){
+  const p=geoFeatureProps(feature);
+  return String(
+    p.formatted||
+    [p.address_line1,p.address_line2].filter(Boolean).join(" ")||
+    ""
+  ).replace(/\s+/g," ").trim();
+}
+
+function geoPhone(feature){
+  const p=geoFeatureProps(feature);
+  const ds=p.datasource?.raw||{};
+  return String(
+    p.contact?.phone||
+    p.phone||
+    ds.phone||
+    ds["contact:phone"]||
+    ds["contact:mobile"]||
+    ""
+  ).trim();
+}
+
+function geoWebsite(feature){
+  const p=geoFeatureProps(feature);
+  const ds=p.datasource?.raw||{};
+  return String(
+    p.website||
+    p.contact?.website||
+    ds.website||
+    ds["contact:website"]||
+    ""
+  ).trim();
+}
+
+function geoInstagram(feature){
+  const p=geoFeatureProps(feature);
+  const ds=p.datasource?.raw||{};
+  const raw=String(
+    ds.instagram||
+    ds["contact:instagram"]||
+    p.contact?.instagram||
+    ""
+  ).trim();
+  const h=kbnHandle(raw||geoWebsite(feature));
+  return h?`https://www.instagram.com/${h}/`:"";
+}
+
+function geoHours(feature){
+  const p=geoFeatureProps(feature);
+  const ds=p.datasource?.raw||{};
+  const h=
+    p.opening_hours||
+    p.openingHours||
+    ds.opening_hours||
+    ds["opening_hours"]||
+    "";
+  if(Array.isArray(h))return h.join(" / ");
+  return String(h||"").trim();
+}
+
+function geoCategories(feature){
+  const p=geoFeatureProps(feature);
+  return Array.isArray(p.categories)?p.categories.map(String):[];
+}
+
+function geoLooksLikeBar(feature){
+  const cats=geoCategories(feature).join(" ").toLowerCase();
+  const n=geoName(feature).toLowerCase();
+  return /catering\.restaurant/.test(cats) && /(居酒屋|酒場|焼き鳥|海鮮|馬刺|郷土|もつ鍋|串|炉端|焼肉|izakaya|yakitori)/i.test(n+" "+cats);
+}
+
+function geoAreaHint(feature){
+  const p=geoFeatureProps(feature);
+  return String(p.city||p.town||p.village||p.suburb||p.county||"").trim();
+}
+
+function geoPlaceScore(feature,{name="",area=""}={}){
+  let score=placeNameMatchScore(name,geoName(feature));
+  const addr=geoAddress(feature);
+  const hint=geoAreaHint(feature);
+  if(area&&(addr.includes(area)||hint.includes(area)))score+=18;
+  else if(addr.includes("熊本")||String(geoFeatureProps(feature).state||"").includes("熊本"))score+=8;
+  if(geoLooksLikeBar(feature))score+=12;
+  if(geoPhone(feature))score+=2;
+  if(geoHours(feature))score+=2;
+  return score;
+}
+
+async function geoapifyGeocodeShop(env,{name,area}){
+  const cfg=geoapifyConfig(env);
+  if(!cfg.apiKey)return {ok:false,configured:false,error:"GEOAPIFY_NOT_CONFIGURED",features:[]};
+
+  const u=new URL("https://api.geoapify.com/v1/geocode/search");
+  u.searchParams.set("text",[name,area,"熊本県","日本"].filter(Boolean).join(" "));
+  u.searchParams.set("filter","countrycode:jp");
+  u.searchParams.set("lang","ja");
+  u.searchParams.set("limit","10");
+  u.searchParams.set("format","geojson");
+  u.searchParams.set("apiKey",cfg.apiKey);
+
+  try{
+    const r=await fetch(u.toString(),{headers:{"Accept":"application/json"}});
+    const text=await r.text();
+    let d={};
+    try{d=text?JSON.parse(text):{}}catch{d={}}
+    if(!r.ok)return {ok:false,configured:true,error:`GEOAPIFY_HTTP_${r.status}`,features:[]};
+    return {ok:true,configured:true,features:Array.isArray(d?.features)?d.features:[]};
+  }catch(e){
+    return {ok:false,configured:true,error:String(e?.message||e||"GEOAPIFY_ERROR"),features:[]};
+  }
+}
+
+async function geoapifyPlaceDetails(env,placeId){
+  const cfg=geoapifyConfig(env);
+  if(!cfg.apiKey||!placeId)return {ok:false,feature:null};
+  const u=new URL("https://api.geoapify.com/v2/place-details");
+  u.searchParams.set("id",String(placeId));
+  u.searchParams.set("features","details");
+  u.searchParams.set("lang","ja");
+  u.searchParams.set("apiKey",cfg.apiKey);
+  try{
+    const r=await fetch(u.toString(),{headers:{"Accept":"application/json"}});
+    const d=await r.json().catch(()=>({}));
+    const feature=Array.isArray(d?.features)?d.features[0]:null;
+    return {ok:r.ok&&!!feature,feature};
+  }catch{
+    return {ok:false,feature:null};
+  }
+}
+
+async function findGeoapifyPlaceForShop(env,{name,area}){
+  const sr=await geoapifyGeocodeShop(env,{name,area});
+  if(!sr.ok)return {ok:false,configured:!!sr.configured,error:sr.error,matched:false};
+
+  const ranked=(sr.features||[])
+    .filter(f=>geoLooksLikeBar(f))
+    .map(feature=>({feature,score:geoPlaceScore(feature,{name,area})}))
+    .sort((a,b)=>b.score-a.score);
+
+  const best=ranked[0];
+  if(!best||best.score<78)return {ok:true,configured:true,matched:false,score:best?.score||0};
+
+  const placeId=geoFeatureProps(best.feature).place_id||"";
+  const detail=placeId?await geoapifyPlaceDetails(env,placeId):{ok:false,feature:null};
   return {
-    budget_min:price.min,
-    budget_max:price.max,
-    hours:extractHoursInfo(text),
-    holiday:extractHolidayInfo(text),
-    features:extractFeaturesInfo(text)
+    ok:true,configured:true,matched:true,
+    feature:detail.ok&&detail.feature?detail.feature:best.feature,
+    score:best.score,
+    confidence:best.score>=100?"high":"medium",
+    source:"geoapify"
+  };
+}
+
+async function fetchKumamotoGeoapifyBars(env,{force=false}={}){
+  const cfg=geoapifyConfig(env);
+  if(!cfg.apiKey)return {ok:false,configured:false,error:"GEOAPIFY_NOT_CONFIGURED",features:[]};
+
+  const key="geoapify_kumamoto_izakaya_v2";
+  if(!force){
+    const cached=await getOpenDataCache(env,key,24);
+    if(Array.isArray(cached))return {ok:true,configured:true,source:"geoapify_cache",features:cached};
+  }
+
+  const u=new URL("https://api.geoapify.com/v2/places");
+  u.searchParams.set("categories","catering.restaurant");
+  // Kumamoto Prefecture broad bounding box: west,south,east,north
+  u.searchParams.set("filter","rect:129.90,32.05,131.35,33.25");
+  u.searchParams.set("lang","ja");
+  u.searchParams.set("limit","100");
+  u.searchParams.set("apiKey",cfg.apiKey);
+
+  try{
+    const r=await fetch(u.toString(),{headers:{"Accept":"application/json"}});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)return {ok:false,configured:true,error:`GEOAPIFY_PLACES_HTTP_${r.status}`,features:[]};
+
+    const features=(Array.isArray(d?.features)?d.features:[]).filter(geoLooksLikeBar);
+    await setOpenDataCache(env,key,features);
+    return {ok:true,configured:true,source:"geoapify",features};
+  }catch(e){
+    const stale=await getOpenDataCache(env,key,24*30);
+    if(Array.isArray(stale))return {ok:true,configured:true,source:"geoapify_stale_cache",features:stale};
+    return {ok:false,configured:true,error:String(e?.message||e||"GEOAPIFY_ERROR"),features:[]};
+  }
+}
+
+function safeHttpUrl(value){
+  try{
+    const u=new URL(String(value||"").trim());
+    return /^https?:$/.test(u.protocol)?u.toString():"";
+  }catch{return ""}
+}
+
+function htmlToText(html){
+  return String(html||"")
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi," ")
+    .replace(/<[^>]+>/g," ")
+    .replace(/&nbsp;/gi," ")
+    .replace(/&amp;/gi,"&")
+    .replace(/&#39;/g,"'")
+    .replace(/&quot;/gi,'"')
+    .replace(/\s+/g," ")
+    .trim();
+}
+
+async function fetchOfficialWebsiteMetadata(url){
+  const target=safeHttpUrl(url);
+  const empty={ok:false,price:{min:null,max:null},hours:"",holiday:"",features:"",instagram:""};
+  if(!target || /instagram\.com|facebook\.com|x\.com|twitter\.com/i.test(target)){
+    return empty;
+  }
+  try{
+    const r=await fetch(target,{
+      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-IZAKAYA-NAVI/1.79"}
+    });
+    if(!r.ok)return empty;
+    const ct=String(r.headers.get("content-type")||"");
+    if(!/text\/html|text\/plain/i.test(ct))return empty;
+    let html=await r.text();
+    if(html.length>250000)html=html.slice(0,250000);
+
+    let instagram="";
+    const links=[...html.matchAll(/https?:\/\/(?:www\.)?instagram\.com\/([A-Za-z0-9._]+)/gi)];
+    for(const m of links){
+      const h=String(m?.[1]||"").trim();
+      if(!h)continue;
+      if(["p","reel","reels","stories","explore","accounts","direct"].includes(h.toLowerCase()))continue;
+      instagram=`https://www.instagram.com/${h}/`;
+      break;
+    }
+
+    const text=htmlToText(html);
+    return {
+      ok:true,
+      price:extractPriceInfo(text),
+      hours:extractHoursInfo(text),
+      holiday:extractHolidayInfo(text),
+      features:extractFeaturesInfo(text),
+      instagram
+    };
+  }catch{
+    return empty;
+  }
+}
+
+function instagramSearchScore({shopName="",area="",handle="",title="",snippet=""}={}){
+  const text=`${title||""} ${snippet||""}`;
+  const handleText=String(handle||"").replace(/[._]/g," ");
+  const nameScore=Math.max(
+    placeNameMatchScore(shopName,title||""),
+    placeNameMatchScore(shopName,snippet||""),
+    placeNameMatchScore(shopName,handleText)
+  );
+
+  let score=Math.round(nameScore*0.72);
+  const normName=normalizePlaceName(shopName);
+  const normText=normalizePlaceName(text);
+  if(normName && normText && normText.includes(normName))score+=22;
+  if(area && text.includes(area))score+=10;
+  if(/熊本/.test(text))score+=6;
+  if(/bar|バー|シーシャ|ラウンジ|スナック|ダーツ|カラオケ|ナイト|club|クラブ/i.test(text))score+=5;
+  if(/公式|official/i.test(text))score+=8;
+
+  return Math.max(0,Math.min(99,score));
+}
+
+async function discoverInstagramForShop(env,{name,area,website="",existing=""}={}){
+  const current=kbnHandle(existing);
+  if(current){
+    return {
+      ok:true,instagram:`https://www.instagram.com/${current}/`,
+      score:100,confidence:"high",source:"existing"
+    };
+  }
+
+  // 公式サイトから直接リンクされているInstagramは最優先
+  if(website){
+    const meta=await fetchOfficialWebsiteMetadata(website);
+    const h=kbnHandle(meta?.instagram||"");
+    if(h){
+      return {
+        ok:true,instagram:`https://www.instagram.com/${h}/`,
+        score:100,confidence:"official",source:"official_website"
+      };
+    }
+  }
+
+  // Google検索(SerpApi)で候補を探して一致度を採点
+  const cfg=leadSearchConfig(env);
+  if(!cfg.apiKey){
+    return {ok:false,configured:false,error:"SERPAPI_NOT_CONFIGURED",instagram:"",score:0,candidates:[]};
+  }
+
+  const query=`"${String(name||"").trim()}" Instagram ${String(area||"熊本").trim()} 熊本`;
+  const sr=await serpApiGoogleSearch(env,{q:query,start:0,num:10});
+  if(!sr.ok){
+    return {ok:false,configured:true,error:sr.error||"INSTAGRAM_SEARCH_FAILED",instagram:"",score:0,candidates:[]};
+  }
+
+  const seen=new Set();
+  const candidates=[];
+  for(const item of (sr.results||[])){
+    const handle=extractInstagramHandleFromUrl(item?.link||"");
+    if(!handle)continue;
+    const key=handle.toLowerCase();
+    if(seen.has(key))continue;
+    seen.add(key);
+
+    const score=instagramSearchScore({
+      shopName:name,
+      area,
+      handle,
+      title:String(item?.title||""),
+      snippet:String(item?.snippet||"")
+    });
+
+    candidates.push({
+      handle,
+      instagram:`https://www.instagram.com/${handle}/`,
+      score,
+      title:t(item?.title,300),
+      snippet:t(item?.snippet,700)
+    });
+  }
+
+  candidates.sort((a,b)=>b.score-a.score);
+  const best=candidates[0]||null;
+
+  if(best && best.score>=90){
+    return {
+      ok:true,configured:true,instagram:best.instagram,
+      score:best.score,confidence:"high",source:"google_instagram_search",
+      candidates:candidates.slice(0,5)
+    };
+  }
+
+  return {
+    ok:true,configured:true,instagram:"",
+    score:Number(best?.score||0),
+    confidence:best&&best.score>=70?"candidate":"low",
+    source:"google_instagram_search",
+    candidates:candidates.slice(0,5)
   };
 }
 
 
-async function refreshIndependentListings(env,{limit=10}={}){
+async function findOpenDataPlaceForShop(env,{name,area}){
+  // 1) Google Places first: use as the strongest existence/name/area verifier.
+  const google=await findGooglePlaceForShop(env,{name,area});
+
+  // 2) Secondary sources independently provide the persisted business fields.
+  const fsq=await findFoursquarePlaceForShop(env,{name,area});
+  const geo=await findGeoapifyPlaceForShop(env,{name,area});
+  const osmSnap=await fetchKumamotoOsmBars(env);
+
+  let osmMatch=null;
+  if(osmSnap.ok){
+    const ranked=osmSnap.places
+      .map(place=>({place,score:osmPlaceScore(place,{name,area})}))
+      .sort((a,b)=>b.score-a.score);
+    if(ranked[0]&&ranked[0].score>=78)osmMatch=ranked[0];
+  }
+
+  // Google matched: require/use the best confirming secondary source when available.
+  if(google.ok&&google.matched){
+    const gName=googlePlaceName(google.place);
+    const gAddress=googlePlaceAddress(google.place);
+    const secondary=[];
+
+    if(fsq.ok&&fsq.matched){
+      secondary.push({
+        kind:"foursquare",
+        fsq_place:fsq.place,
+        score:crossSourceNameAreaScore(gName,gAddress,fsqName(fsq.place),fsqAddress(fsq.place))
+      });
+    }
+    if(geo.ok&&geo.matched){
+      secondary.push({
+        kind:"geoapify",
+        feature:geo.feature,
+        score:crossSourceNameAreaScore(gName,gAddress,geoName(geo.feature),geoAddress(geo.feature))
+      });
+    }
+    if(osmMatch){
+      secondary.push({
+        kind:"osm",
+        place:osmMatch.place,
+        score:crossSourceNameAreaScore(gName,gAddress,osmPlaceName(osmMatch.place),osmAddress(osmMatch.place))
+      });
+    }
+
+    secondary.sort((a,b)=>b.score-a.score);
+    const best=secondary.find(x=>x.score>=82);
+
+    if(best){
+      return {
+        ok:true,
+        matched:true,
+        kind:best.kind,
+        place:best.place,
+        feature:best.feature,
+        fsq_place:best.fsq_place,
+        score:Math.max(Number(google.score||0),Number(best.score||0)),
+        confidence:"high",
+        source:`google_places+${best.kind}`,
+        google_place_id:String(google.place?.id||"")
+      };
+    }
+  }
+
+  // If Google is unavailable / no confident match, continue with the existing fallback chain.
+  if(fsq.ok&&fsq.matched){
+    return {
+      ok:true,matched:true,kind:"foursquare",fsq_place:fsq.place,score:fsq.score,
+      confidence:fsq.confidence,source:"foursquare"
+    };
+  }
+
+  if(geo.ok&&geo.matched){
+    return {
+      ok:true,matched:true,kind:"geoapify",feature:geo.feature,score:geo.score,
+      confidence:geo.confidence,source:"geoapify"
+    };
+  }
+
+  if(osmMatch){
+    return {
+      ok:true,matched:true,kind:"osm",place:osmMatch.place,score:osmMatch.score,
+      confidence:osmMatch.score>=100?"high":"medium",
+      source:osmSnap.source
+    };
+  }
+
+  if(!google.configured&&!fsq.configured&&!geo.configured&&!osmSnap.ok){
+    return {
+      ok:false,
+      error:google.error||fsq.error||geo.error||osmSnap.error||"DISCOVERY_SOURCES_UNAVAILABLE",
+      matched:false
+    };
+  }
+
+  return {
+    ok:true,
+    matched:false,
+    score:Math.max(
+      Number(google.score||0),
+      Number(fsq.score||0),
+      Number(geo.score||0),
+      Number(osmMatch?.score||0)
+    ),
+    source:google.configured?"google_places":(fsq.configured?"foursquare":(geo.configured?"geoapify":"osm"))
+  };
+}
+async function ensureOpenSyncTable(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS open_data_sync_state(
+      shop_id INTEGER PRIMARY KEY,
+      source_id TEXT,
+      checked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+}
+
+async function recentlyCheckedOpenData(env,shopId,days=30){
+  await ensureOpenSyncTable(env);
+  const row=await env.DB.prepare(`
+    SELECT checked_at FROM open_data_sync_state
+    WHERE shop_id=?
+      AND datetime(checked_at)>=datetime('now',?)
+  `).bind(shopId,`-${Math.max(1,Number(days)||30)} days`).first();
+  return !!row;
+}
+
+async function markOpenDataChecked(env,shopId,sourceId){
+  await ensureOpenSyncTable(env);
+  await env.DB.prepare(`
+    INSERT INTO open_data_sync_state(shop_id,source_id,checked_at)
+    VALUES(?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(shop_id) DO UPDATE SET
+      source_id=excluded.source_id,
+      checked_at=CURRENT_TIMESTAMP
+  `).bind(shopId,String(sourceId||"")).run();
+}
+
+function sanitizeStoredBudget(minValue,maxValue){
+  let min=Number(minValue||0)||null;
+  let max=Number(maxValue||0)||null;
+  const valid=v=>v==null||(Number.isFinite(v)&&v>=100&&v<=100000);
+  if(!valid(min))min=null;
+  if(!valid(max))max=null;
+  if(min&&max&&max<min)[min,max]=[max,min];
+  if(min&&max&&max/min>50)return {min:null,max:null,invalid:true};
+  return {min,max,invalid:false};
+}
+
+function extractPublicMetadata(lead){
+  const tgs=osmTags(lead||{});
+  const rawPrice=[
+    tgs.charge,tgs.fee,tgs.price,tgs["drink:price"],tgs["entry_fee"],tgs.description
+  ].filter(Boolean).join(" ");
+  const p=extractPriceInfo(rawPrice);
+  return {
+    budget_min:p.min,
+    budget_max:p.max,
+    hours:osmHours(lead),
+    holiday:osmHoliday(lead),
+    features:osmFeatures(lead)
+  };
+}
+
+async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=false,force=false,missingOnly=false}={}){
   const max=Math.max(1,Math.min(Number(limit)||10,30));
+  const cursor=Math.max(0,Number(afterId)||0);
 
   const r=await env.DB.prepare(`
-    SELECT id,name,area,instagram,genre,hours,holiday,features,budget_min,budget_max,listing_status
+    SELECT id,name,area,address,hours,holiday,instagram,genre,features,description,
+           budget_min,budget_max,seats,phone,listing_status,is_published
     FROM shops
     WHERE COALESCE(listing_status,'published')='provisional'
-    ORDER BY updated_at ASC, id ASC
+      AND id>?
+      AND (
+        ?=0 OR
+        COALESCE(TRIM(hours),'')='' OR
+        COALESCE(TRIM(phone),'')='' OR
+        budget_min IS NULL OR budget_max IS NULL OR
+        COALESCE(TRIM(address),'')='' OR
+        COALESCE(TRIM(features),'')='' OR
+        COALESCE(TRIM(instagram),'')=''
+      )
+    ORDER BY id ASC
     LIMIT ?
-  `).bind(max).all();
+  `).bind(cursor,missingOnly?1:0,max).all();
 
   const rows=r.results||[];
-  const updated=[];
-  const unchanged=[];
-  const failed=[];
+  const updated=[],unchanged=[],failed=[];
 
   for(const shop of rows){
-    const handle=kbnHandle(shop.instagram||"");
-    const queryArea=t(shop.area||"熊本",80)||"熊本";
-    const typeKey=(()=>{
-      const g=String(shop.genre||"").toLowerCase();
-      if(g.includes("ダーツ"))return "darts";
-      if(g.includes("カラオケ"))return "karaoke";
-      if(g.includes("スナック"))return "snack";
-      if(g.includes("ラウンジ"))return "lounge";
-      if(g.includes("ガールズ"))return "girls";
-      if(g.includes("ショット"))return "shot";
-      if(g.includes("スポーツ"))return "sports";
-      if(g.includes("ワイン"))return "wine";
-      if(g.includes("ビア"))return "beer";
-      if(g.includes("カクテル"))return "cocktail";
-      if(g.includes("ミュージック"))return "music";
-      if(g.includes("シーシャ"))return "shisha";
-      if(g.includes("コンセプト"))return "concept";
-      return "bar";
-    })();
-
     try{
-      const result=await searchInstagramLeads(env,{
-        area:queryArea,
-        type:typeKey,
-        start:1
-      });
+      const cleanName=String(shop.name||"").replace(/^【KIN独自掲載】/,"").trim();
 
-      if(!result.ok){
-        failed.push({id:shop.id,name:shop.name,reason:result.error||"SEARCH_FAILED"});
+      // 1) Googleで存在・店名・エリアを照合
+      const found=await findGooglePlaceForShop(env,{name:cleanName,area:shop.area||"熊本"});
+      if(!found.ok){
+        failed.push({id:shop.id,name:shop.name,reason:found.error||"GOOGLE_PLACES_ERROR"});
+        continue;
+      }
+      if(!found.matched){
+        unchanged.push({id:shop.id,name:shop.name,reason:"GOOGLE_MATCH_NOT_FOUND"});
         continue;
       }
 
-      let lead=null;
+      // 2) Place IDから詳細情報を取得
+      const details=await googlePlaceDetails(env,found.place?.id);
+      const gp=details.ok&&details.place?details.place:found.place;
 
-      if(handle){
-        lead=(result.leads||[]).find(x=>kbnHandle(x.handle||x.instagram||"")===handle) || null;
+      const gName=t(googlePlaceName(gp)||cleanName,150);
+      const gAddress=t(googlePlaceAddress(gp)||shop.address||"",500);
+      const gPhone=t(googlePhone(gp)||"",80);
+      const gHours=t(googleOpeningHours(gp)||"",800);
+      const gHoliday=t(googleHolidayFromHours(gp)||"",180);
+      const gWebsite=googleWebsite(gp);
+      const gFeatures=googleDetailFeatures(gp);
+      const gPrice=googlePriceInfo(gp);
+      const area=inferKumamotoAreaFromText(gAddress,shop.area||"熊本市");
+
+      // 3) 補助APIでGoogleにない項目を補完
+      const fsq=await findFoursquarePlaceForShop(env,{name:gName,area});
+      const geo=await findGeoapifyPlaceForShop(env,{name:gName,area});
+      const osmSnap=await fetchKumamotoOsmBars(env);
+
+      let osmMatch=null;
+      if(osmSnap.ok){
+        const ranked=osmSnap.places
+          .map(place=>({place,score:osmPlaceScore(place,{name:gName,area})}))
+          .sort((a,b)=>b.score-a.score);
+        if(ranked[0]&&ranked[0].score>=78)osmMatch=ranked[0].place;
       }
 
-      if(!lead){
-        const shopName=String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim().toLowerCase();
-        lead=(result.leads||[]).find(x=>{
-          const title=String(x.title||"").toLowerCase();
-          return shopName && (title.includes(shopName) || shopName.includes(title));
-        }) || null;
+      const fsqPlace=fsq.ok&&fsq.matched?fsq.place:null;
+      const geoFeature=geo.ok&&geo.matched?geo.feature:null;
+
+      const phone=gPhone ||
+        (fsqPlace?fsqPhone(fsqPlace):"") ||
+        (geoFeature?geoPhone(geoFeature):"") ||
+        (osmMatch?osmPhone(osmMatch):"") ||
+        shop.phone || "";
+
+      const hours=gHours ||
+        (fsqPlace?fsqHours(fsqPlace):"") ||
+        (geoFeature?geoHours(geoFeature):"") ||
+        (osmMatch?osmHours(osmMatch):"") ||
+        shop.hours || "";
+
+      const holiday=gHoliday ||
+        (osmMatch?osmHoliday(osmMatch):"") ||
+        shop.holiday || "";
+
+      const website=gWebsite ||
+        (fsqPlace?fsqWebsite(fsqPlace):"") ||
+        (geoFeature?geoWebsite(geoFeature):"") ||
+        (osmMatch?osmWebsite(osmMatch):"");
+
+      let instagram=
+        (fsqPlace?fsqInstagram(fsqPlace):"") ||
+        (geoFeature?geoInstagram(geoFeature):"") ||
+        (osmMatch?osmInstagram(osmMatch):"") ||
+        shop.instagram || "";
+
+      let features=[
+        gFeatures,
+        fsqPlace?extractFeaturesInfo(`${fsqCategories(fsqPlace).join(" ")} ${gName}`):"",
+        geoFeature?extractFeaturesInfo(`${geoCategories(geoFeature).join(" ")} ${gName}`):"",
+        osmMatch?osmFeatures(osmMatch):"",
+        shop.features||""
+      ].filter(Boolean).join("、");
+
+      // 4) 公式Webがある場合はさらに補完
+      const webMeta=website?await fetchOfficialWebsiteMetadata(website):
+        {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:"",instagram:""};
+
+      if(!instagram && webMeta.instagram)instagram=webMeta.instagram;
+
+      let instagramDiscovery=null;
+      if(!instagram){
+        instagramDiscovery=await discoverInstagramForShop(env,{
+          name:gName,area,website,existing:shop.instagram||""
+        });
+        if(instagramDiscovery?.instagram && Number(instagramDiscovery.score||0)>=90){
+          instagram=instagramDiscovery.instagram;
+        }else if(instagramDiscovery?.confidence==="candidate" && instagramDiscovery?.candidates?.[0]){
+          const top=instagramDiscovery.candidates[0];
+          await createKbnAlert(env,{
+            type:"instagram_candidate",
+            title:`Instagram候補: ${gName}`,
+            message:`@${top.handle} / 一致度 ${top.score}% — 自動保存せず候補として保留しました。`,
+            shopId:shop.id
+          });
+        }
       }
 
-      if(!lead){
-        unchanged.push({id:shop.id,name:shop.name,reason:"MATCH_NOT_FOUND"});
-        continue;
-      }
+      const finalHours=hours||webMeta.hours||shop.hours||"";
+      const finalHoliday=holiday||webMeta.holiday||shop.holiday||"";
+      if(webMeta.features)features=[features,webMeta.features].filter(Boolean).join("、");
 
-      const meta=extractPublicMetadata(lead);
+      const budgetMin=
+        webMeta.price?.min ??
+        gPrice.min ??
+        shop.budget_min ??
+        null;
 
-      const next={
-        hours:shop.hours || meta.hours || "",
-        holiday:shop.holiday || meta.holiday || "",
-        features:shop.features || meta.features || "",
-        budget_min:shop.budget_min ?? meta.budget_min ?? null,
-        budget_max:shop.budget_max ?? meta.budget_max ?? null
-      };
+      const budgetMax=
+        webMeta.price?.max ??
+        gPrice.max ??
+        shop.budget_max ??
+        null;
 
       const changed=
-        String(next.hours||"")!==String(shop.hours||"") ||
-        String(next.holiday||"")!==String(shop.holiday||"") ||
-        String(next.features||"")!==String(shop.features||"") ||
-        Number(next.budget_min||0)!==Number(shop.budget_min||0) ||
-        Number(next.budget_max||0)!==Number(shop.budget_max||0);
+        String(area)!==String(shop.area||"") ||
+        String(gAddress)!==String(shop.address||"") ||
+        String(phone)!==String(shop.phone||"") ||
+        String(finalHours)!==String(shop.hours||"") ||
+        String(finalHoliday)!==String(shop.holiday||"") ||
+        String(instagram)!==String(shop.instagram||"") ||
+        String(features)!==String(shop.features||"") ||
+        Number(budgetMin??-1)!==Number(shop.budget_min??-1) ||
+        Number(budgetMax??-1)!==Number(shop.budget_max??-1);
 
       if(!changed){
-        unchanged.push({id:shop.id,name:shop.name,reason:"NO_NEW_DATA"});
+        unchanged.push({
+          id:shop.id,name:shop.name,reason:"NO_CHANGE",
+          match_score:found.score,
+          details_ok:!!details.ok
+        });
         continue;
       }
 
       await env.DB.prepare(`
-        UPDATE shops
-        SET hours=?,
-            holiday=?,
-            features=?,
-            budget_min=?,
-            budget_max=?,
-            updated_at=CURRENT_TIMESTAMP
+        UPDATE shops SET
+          area=?,address=?,hours=?,holiday=?,instagram=?,features=?,
+          budget_min=?,budget_max=?,phone=?,updated_at=CURRENT_TIMESTAMP
         WHERE id=?
       `).bind(
-        next.hours,
-        next.holiday,
-        next.features,
-        next.budget_min,
-        next.budget_max,
-        shop.id
+        area,gAddress,finalHours,finalHoliday,instagram,features,
+        budgetMin,budgetMax,phone,shop.id
       ).run();
 
       updated.push({
-        id:shop.id,
-        name:shop.name,
-        hours:next.hours,
-        holiday:next.holiday,
-        features:next.features,
-        budget_min:next.budget_min,
-        budget_max:next.budget_max
+        id:shop.id,name:shop.name,area,address:gAddress,phone,
+        hours:finalHours,holiday:finalHoliday,instagram,
+        budget_min:budgetMin,budget_max:budgetMax,
+        match_confidence:found.confidence,match_score:found.score,
+        google_details:!!details.ok,
+        source:"google_details+secondary+official_web"
       });
-
     }catch(e){
       failed.push({
-        id:shop.id,
-        name:shop.name,
+        id:shop.id,name:shop.name,
         reason:String(e?.message||e||"UNKNOWN_ERROR").slice(0,300)
       });
     }
   }
 
+  const nextAfterId=rows.length?Number(rows[rows.length-1].id||0):cursor;
+  const moreR=await env.DB.prepare(`
+    SELECT id FROM shops
+    WHERE COALESCE(listing_status,'published')='provisional'
+      AND id>?
+      AND (
+        ?=0 OR
+        COALESCE(TRIM(hours),'')='' OR
+        COALESCE(TRIM(phone),'')='' OR
+        budget_min IS NULL OR budget_max IS NULL OR
+        COALESCE(TRIM(address),'')='' OR
+        COALESCE(TRIM(features),'')='' OR
+        COALESCE(TRIM(instagram),'')=''
+      )
+    ORDER BY id ASC LIMIT 1
+  `).bind(nextAfterId,missingOnly?1:0).first();
+
+  return {
+    ok:true,checked:rows.length,updated,unchanged,failed,
+    next_after_id:nextAfterId,has_more:!!moreR,
+    provider:"google_details_secondary_official_web"
+  };
+}
+async function refreshMissingShopImages(env,{limit=20,afterId=0}={}){
+  const max=Math.max(1,Math.min(Number(limit)||20,30));
+  const cursor=Math.max(0,Number(afterId)||0);
+  const r=await env.DB.prepare(`
+    SELECT id,name,area,address,image_url,image_key
+    FROM shops
+    WHERE id>?
+      AND COALESCE(is_published,1)=1
+      AND COALESCE(TRIM(image_url),'')=''
+    ORDER BY id ASC LIMIT ?
+  `).bind(cursor,max).all();
+  const rows=r.results||[],updated=[],unchanged=[],failed=[];
+  for(const shop of rows){
+    try{
+      const cleanName=String(shop.name||"").replace(/^【KIN独自掲載】/,"").trim();
+      const found=await findGooglePlaceForShop(env,{name:cleanName,area:shop.area||"熊本"});
+      if(!found.ok||!found.matched){
+        unchanged.push({id:shop.id,name:shop.name,reason:found.error||"GOOGLE_MATCH_NOT_FOUND"});
+        continue;
+      }
+      const details=await googlePlaceDetails(env,found.place?.id);
+      const gp=details.ok&&details.place?details.place:found.place;
+      const photoName=googlePhotoName(gp);
+      if(!photoName){
+        unchanged.push({id:shop.id,name:shop.name,reason:"GOOGLE_PHOTO_NOT_FOUND"});
+        continue;
+      }
+      const imageUrl=googlePhotoProxyUrl(shop.id);
+      await env.DB.prepare(`UPDATE shops SET image_url=?,image_key=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+        .bind(imageUrl,`google:${photoName}`,shop.id).run();
+      updated.push({id:shop.id,name:shop.name,image_url:imageUrl,source:"google_places_photo"});
+    }catch(e){
+      failed.push({id:shop.id,name:shop.name,reason:String(e?.message||e||"IMAGE_REFRESH_ERROR").slice(0,250)});
+    }
+  }
+  const next=rows.length?Number(rows[rows.length-1].id||0):cursor;
+  const more=await env.DB.prepare(`SELECT id FROM shops WHERE id>? AND COALESCE(is_published,1)=1 AND COALESCE(TRIM(image_url),'')='' ORDER BY id ASC LIMIT 1`).bind(next).first();
+  return {ok:true,checked:rows.length,updated,unchanged,failed,next_after_id:next,has_more:!!more};
+}
+
+function googlePlacesConfig(env){
+  return {apiKey:t(env.GOOGLE_PLACES_API_KEY,2000)};
+}
+
+function googlePlaceName(place){
+  return String(place?.displayName?.text||"").trim();
+}
+
+function googlePlaceAddress(place){
+  return String(place?.formattedAddress||"").replace(/\s+/g," ").trim();
+}
+
+function googlePlaceTypes(place){
+  return [
+    String(place?.primaryType||""),
+    ...(Array.isArray(place?.types)?place.types.map(String):[])
+  ].filter(Boolean);
+}
+
+function googlePlaceLooksLikeBar(place){
+  const types=googlePlaceTypes(place).join(" ").toLowerCase();
+  const name=googlePlaceName(place).toLowerCase();
+  const strong=["restaurant","japanese_restaurant","izakaya","焼き鳥","居酒屋","海鮮","馬刺し","郷土料理","もつ鍋","串焼き","炉端","焼肉","酒場"];
+  const bad=["cafe","coffee_shop","bakery","dessert_shop","hotel","beauty_salon"];
+  return strong.some(x=>types.includes(x)||name.includes(x)) && !bad.some(x=>types.includes(x));
+}
+
+function googlePlaceScore(place,{name="",area=""}={}){
+  let score=placeNameMatchScore(name,googlePlaceName(place));
+  const address=googlePlaceAddress(place);
+  if(area&&address.includes(area))score+=18;
+  else if(address.includes("熊本"))score+=8;
+  if(googlePlaceLooksLikeBar(place))score+=12;
+  return score;
+}
+
+async function googlePlacesTextSearch(env,{query,pageSize=20}){
+  const cfg=googlePlacesConfig(env);
+  if(!cfg.apiKey){
+    return {ok:false,configured:false,error:"GOOGLE_PLACES_NOT_CONFIGURED",places:[]};
+  }
+
+  try{
+    const r=await fetch("https://places.googleapis.com/v1/places:searchText",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "X-Goog-Api-Key":cfg.apiKey,
+        "X-Goog-FieldMask":"places.id,places.displayName,places.formattedAddress,places.primaryType,places.types"
+      },
+      body:JSON.stringify({
+        textQuery:String(query||""),
+        languageCode:"ja",
+        regionCode:"JP",
+        pageSize:Math.max(1,Math.min(Number(pageSize)||20,20))
+      })
+    });
+
+    const text=await r.text();
+    let d={};
+    try{d=text?JSON.parse(text):{}}catch{d={raw:text}}
+
+    if(!r.ok){
+      return {
+        ok:false,
+        configured:true,
+        status:r.status,
+        error:d?.error?.message||`GOOGLE_PLACES_HTTP_${r.status}`,
+        places:[]
+      };
+    }
+
+    return {
+      ok:true,
+      configured:true,
+      places:Array.isArray(d?.places)?d.places:[]
+    };
+  }catch(e){
+    return {
+      ok:false,
+      configured:true,
+      error:String(e?.message||e||"GOOGLE_PLACES_ERROR"),
+      places:[]
+    };
+  }
+}
+
+async function findGooglePlaceForShop(env,{name,area}){
+  const sr=await googlePlacesTextSearch(env,{
+    query:[name,area,"熊本県"].filter(Boolean).join(" "),
+    pageSize:8
+  });
+
+  if(!sr.ok){
+    return {ok:false,configured:!!sr.configured,error:sr.error,matched:false};
+  }
+
+  const ranked=(sr.places||[])
+    .filter(googlePlaceLooksLikeBar)
+    .map(place=>({place,score:googlePlaceScore(place,{name,area})}))
+    .sort((a,b)=>b.score-a.score);
+
+  const best=ranked[0];
+  if(!best||best.score<78){
+    return {ok:true,configured:true,matched:false,score:best?.score||0};
+  }
+
   return {
     ok:true,
-    checked:rows.length,
-    updated,
-    unchanged,
-    failed
+    configured:true,
+    matched:true,
+    place:best.place,
+    score:best.score,
+    confidence:best.score>=100?"high":"medium",
+    source:"google_places"
   };
 }
 
-async function autoDiscover(env,request,maxListings=10,pairLimit=6,perPairLimit=2){
+async function googlePlaceDetails(env,placeId){
+  const cfg=googlePlacesConfig(env);
+  const id=String(placeId||"").trim();
+  if(!cfg.apiKey)return {ok:false,configured:false,error:"GOOGLE_PLACES_NOT_CONFIGURED",place:null};
+  if(!id)return {ok:false,configured:true,error:"GOOGLE_PLACE_ID_MISSING",place:null};
+
+  try{
+    const fieldMask=[
+      "id","displayName","formattedAddress","primaryType","types","businessStatus",
+      "nationalPhoneNumber","internationalPhoneNumber",
+      "regularOpeningHours","currentOpeningHours",
+      "websiteUri","priceLevel","priceRange","googleMapsUri","photos"
+    ].join(",");
+
+    const r=await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(id)}`,{
+      headers:{
+        "X-Goog-Api-Key":cfg.apiKey,
+        "X-Goog-FieldMask":fieldMask,
+        "Accept-Language":"ja"
+      }
+    });
+
+    const raw=await r.text();
+    let d={};
+    try{d=raw?JSON.parse(raw):{}}catch{d={raw}}
+
+    if(!r.ok){
+      return {
+        ok:false,configured:true,status:r.status,
+        error:d?.error?.message||`GOOGLE_PLACE_DETAILS_HTTP_${r.status}`,
+        place:null
+      };
+    }
+    return {ok:true,configured:true,place:d};
+  }catch(e){
+    return {ok:false,configured:true,error:String(e?.message||e||"GOOGLE_PLACE_DETAILS_ERROR"),place:null};
+  }
+}
+
+function googleOpeningHours(place){
+  const rows=place?.regularOpeningHours?.weekdayDescriptions;
+  if(Array.isArray(rows)&&rows.length)return rows.join(" / ");
+  const current=place?.currentOpeningHours?.weekdayDescriptions;
+  if(Array.isArray(current)&&current.length)return current.join(" / ");
+  return "";
+}
+
+function googleHolidayFromHours(place){
+  const rows=place?.regularOpeningHours?.weekdayDescriptions;
+  if(!Array.isArray(rows))return "";
+  return rows
+    .filter(x=>/休業|定休|closed/i.test(String(x||"")))
+    .map(x=>String(x||"").split(":")[0].trim())
+    .filter(Boolean)
+    .join("・");
+}
+
+function googlePhone(place){
+  return String(place?.nationalPhoneNumber||place?.internationalPhoneNumber||"").trim();
+}
+
+function googleWebsite(place){
+  return String(place?.websiteUri||"").trim();
+}
+
+function googlePhotoName(place){
+  const photos=Array.isArray(place?.photos)?place.photos:[];
+  const name=String(photos[0]?.name||"").trim();
+  return /^places\/[^/]+\/photos\/[^/]+$/.test(name)?name:"";
+}
+
+function googlePhotoProxyUrl(shopId){
+  return `/api/shop-photo?id=${encodeURIComponent(String(shopId||""))}`;
+}
+
+function googlePriceInfo(place){
+  const moneyToNum=(x)=>{
+    if(x===null||x===undefined)return null;
+    if(typeof x==="number")return Number.isFinite(x)?Math.round(x):null;
+    if(typeof x==="object"){
+      const units=Number(x.units||0);
+      const nanos=Number(x.nanos||0);
+      const v=units+nanos/1e9;
+      return Number.isFinite(v)?Math.round(v):null;
+    }
+    const n=Number(String(x).replace(/[^\d.]/g,""));
+    return Number.isFinite(n)?Math.round(n):null;
+  };
+
+  const range=place?.priceRange;
+  let min=range?moneyToNum(range.startPrice||range.minPrice||range.minimumPrice):null;
+  let max=range?moneyToNum(range.endPrice||range.maxPrice||range.maximumPrice):null;
+
+  if(min===null&&max===null){
+    const rough={
+      PRICE_LEVEL_FREE:[0,0],
+      PRICE_LEVEL_INEXPENSIVE:[500,2000],
+      PRICE_LEVEL_MODERATE:[2000,5000],
+      PRICE_LEVEL_EXPENSIVE:[5000,10000],
+      PRICE_LEVEL_VERY_EXPENSIVE:[10000,30000]
+    }[String(place?.priceLevel||"").toUpperCase()];
+    if(rough){min=rough[0];max=rough[1];}
+  }
+  return {min,max};
+}
+
+function googleDetailFeatures(place){
+  const types=googlePlaceTypes(place).map(x=>String(x).replace(/_/g," "));
+  return extractFeaturesInfo(types.join(" "));
+}
+
+function findBestSecondaryForGoogle({googlePlace,fsqResults=[],geoFeatures=[],osmPlaces=[]}={}){
+  const name=googlePlaceName(googlePlace);
+  const address=googlePlaceAddress(googlePlace);
+  const ranked=[];
+
+  for(const p of fsqResults||[]){
+    if(!fsqLooksLikeBar(p))continue;
+    ranked.push({
+      kind:"foursquare",
+      place:p,
+      score:crossSourceNameAreaScore(name,address,fsqName(p),fsqAddress(p))
+    });
+  }
+
+  for(const f of geoFeatures||[]){
+    if(!geoLooksLikeBar(f))continue;
+    ranked.push({
+      kind:"geoapify",
+      place:f,
+      score:crossSourceNameAreaScore(name,address,geoName(f),geoAddress(f))
+    });
+  }
+
+  for(const p of osmPlaces||[]){
+    if(!osmPlaceLooksLikeBar(p))continue;
+    ranked.push({
+      kind:"osm",
+      place:p,
+      score:crossSourceNameAreaScore(name,address,osmPlaceName(p),osmAddress(p))
+    });
+  }
+
+  ranked.sort((a,b)=>b.score-a.score);
+  const best=ranked[0];
+  return best&&best.score>=82?best:null;
+}
+
+function foursquareConfig(env){
+  return {apiKey:t(env.FOURSQUARE_API_KEY,2000)};
+}
+
+function fsqName(place){
+  return String(place?.name||place?.display_name||"").trim();
+}
+
+function fsqCategories(place){
+  const out=[];
+  if(Array.isArray(place?.categories)){
+    for(const c of place.categories){
+      if(typeof c==="string")out.push(c);
+      else if(c&&typeof c==="object"){
+        out.push(c.name||c.short_name||c.label||c.category_name||"");
+      }
+    }
+  }
+  if(Array.isArray(place?.fsq_category_labels))out.push(...place.fsq_category_labels);
+  if(Array.isArray(place?.category_labels))out.push(...place.category_labels);
+  return [...new Set(out.map(x=>String(x||"").trim()).filter(Boolean))];
+}
+
+function fsqAddress(place){
+  const l=place?.location||{};
+  const parts=[
+    place?.address||l.address,
+    place?.address_extended||l.address_extended,
+    place?.locality||l.locality,
+    place?.region||l.region,
+    place?.postcode||l.postcode
+  ].filter(Boolean).map(String);
+  const formatted=String(
+    place?.formatted_address||
+    l.formatted_address||
+    l.formattedAddress||
+    ""
+  ).trim();
+  return (formatted||parts.join(" ")).replace(/\s+/g," ").trim();
+}
+
+function fsqAreaHint(place){
+  const l=place?.location||{};
+  return String(place?.locality||l.locality||place?.region||l.region||"").trim();
+}
+
+function fsqPhone(place){
+  return String(
+    place?.tel||
+    place?.telephone||
+    place?.phone||
+    place?.contact?.phone||
+    ""
+  ).trim();
+}
+
+function fsqWebsite(place){
+  return String(
+    place?.website||
+    place?.website_url||
+    place?.url||
+    ""
+  ).trim();
+}
+
+function fsqInstagram(place){
+  const raw=String(
+    place?.instagram||
+    place?.social_media?.instagram||
+    place?.social?.instagram||
+    ""
+  ).trim();
+  const h=kbnHandle(raw||fsqWebsite(place));
+  return h?`https://www.instagram.com/${h}/`:"";
+}
+
+function fsqHours(place){
+  const h=place?.hours;
+  if(!h)return "";
+  if(typeof h==="string")return h.trim();
+  if(Array.isArray(h))return h.map(String).join(" / ");
+  if(Array.isArray(h?.display))return h.display.map(String).join(" / ");
+  if(Array.isArray(h?.regular))return h.regular.map(x=>typeof x==="string"?x:JSON.stringify(x)).join(" / ");
+  if(typeof h==="object"){
+    const text=String(h.display||h.status||"").trim();
+    if(text)return text;
+  }
+  return "";
+}
+
+function fsqLooksLikeBar(place){
+  const cats=fsqCategories(place).join(" ").toLowerCase();
+  const name=fsqName(place).toLowerCase();
+  const strong=["izakaya","japanese restaurant","restaurant","居酒屋","酒場","焼き鳥","海鮮","馬刺し","郷土料理","もつ鍋","串","炉端","焼肉"];
+  const bad=["cafe","coffee","カフェ","喫茶","bakery","hotel","美容","ネイル","病院"];
+  return strong.some(x=>cats.includes(x)||name.includes(x)) && !bad.some(x=>cats.includes(x));
+}
+
+function fsqPlaceScore(place,{name="",area=""}={}){
+  let score=placeNameMatchScore(name,fsqName(place));
+  const addr=fsqAddress(place);
+  const hint=fsqAreaHint(place);
+  if(area&&(addr.includes(area)||hint.includes(area)))score+=18;
+  else if(addr.includes("熊本")||hint.includes("熊本"))score+=8;
+  if(fsqLooksLikeBar(place))score+=12;
+  if(fsqPhone(place))score+=2;
+  if(fsqWebsite(place))score+=2;
+  return score;
+}
+
+async function foursquareSearch(env,{query="居酒屋",near="熊本県, 日本",limit=20}={}){
+  const cfg=foursquareConfig(env);
+  if(!cfg.apiKey){
+    return {ok:false,configured:false,error:"FOURSQUARE_NOT_CONFIGURED",results:[]};
+  }
+
+  const u=new URL("https://places-api.foursquare.com/places/search");
+  if(query)u.searchParams.set("query",String(query));
+  if(near)u.searchParams.set("near",String(near));
+  u.searchParams.set("limit",String(Math.max(1,Math.min(Number(limit)||20,50))));
+  u.searchParams.set("sort","RELEVANCE");
+  u.searchParams.set("tel_format","NATIONAL");
+
+  try{
+    const r=await fetch(u.toString(),{
+      headers:{
+        "Accept":"application/json",
+        "Authorization":`Bearer ${cfg.apiKey}`,
+        "X-Places-Api-Version":"2025-06-17"
+      }
+    });
+    const text=await r.text();
+    let d={};
+    try{d=text?JSON.parse(text):{}}catch{d={raw:text}}
+    if(!r.ok){
+      return {
+        ok:false,configured:true,
+        error:d?.message||d?.error?.message||`FOURSQUARE_HTTP_${r.status}`,
+        status:r.status,results:[]
+      };
+    }
+    const results=Array.isArray(d?.results)
+      ? d.results
+      : Array.isArray(d?.places)
+        ? d.places
+        : [];
+    return {ok:true,configured:true,results};
+  }catch(e){
+    return {
+      ok:false,configured:true,
+      error:String(e?.message||e||"FOURSQUARE_ERROR"),
+      results:[]
+    };
+  }
+}
+
+async function findFoursquarePlaceForShop(env,{name,area}){
+  const sr=await foursquareSearch(env,{
+    query:String(name||"居酒屋"),
+    near:[area,"熊本県","日本"].filter(Boolean).join(", "),
+    limit:10
+  });
+  if(!sr.ok)return {ok:false,configured:!!sr.configured,error:sr.error,matched:false};
+
+  const ranked=(sr.results||[])
+    .filter(fsqLooksLikeBar)
+    .map(place=>({place,score:fsqPlaceScore(place,{name,area})}))
+    .sort((a,b)=>b.score-a.score);
+
+  const best=ranked[0];
+  if(!best||best.score<78){
+    return {ok:true,configured:true,matched:false,score:best?.score||0};
+  }
+  return {
+    ok:true,configured:true,matched:true,
+    place:best.place,
+    score:best.score,
+    confidence:best.score>=100?"high":"medium",
+    source:"foursquare"
+  };
+}
+
+function crossSourceNameAreaScore(name,address,otherName,otherAddress){
+  let score=placeNameMatchScore(name,otherName);
+  const a1=inferKumamotoAreaFromText(address||"","");
+  const a2=inferKumamotoAreaFromText(otherAddress||"","");
+  if(a1&&a2&&a1===a2)score+=12;
+  else if(address&&otherAddress&&String(otherAddress).includes("熊本"))score+=5;
+  return score;
+}
+
+function normalizePhoneDigits(value){
+  return String(value||"").replace(/\D/g,"");
+}
+
+function isLikelyJapanesePhone(value){
+  const d=normalizePhoneDigits(value);
+  return /^0\d{9,10}$/.test(d);
+}
+
+function isKumamotoAddress(value,area=""){
+  const s=String(value||"").replace(/\s+/g,"");
+  if(!s)return false;
+  if(s.includes("熊本県"))return true;
+  if(area && s.includes(String(area).replace(/\s+/g,"")))return true;
+  return false;
+}
+
+function autoListingBarStrength({name="",genre="",categories=[],amenity=""}={}){
+  const text=[name,genre,...categories,amenity].join(" ").toLowerCase(); let score=0;
+  const strong=["居酒屋","izakaya","酒場","焼き鳥","yakitori","海鮮","刺身","馬刺し","郷土料理","もつ鍋","串焼き","串揚げ","炉端","日本酒","焼酎","飲み放題","個室","焼肉","japanese restaurant"];
+  const bad=["cafe","カフェ","喫茶","スイーツ","hotel","ホテル","美容","ネイル","エステ","病院","歯科","不動産","建設","学校","塾","コンビニ","スーパー"];
+  if(strong.some(x=>text.includes(x)))score+=4;
+  if(/restaurant|catering\.restaurant/.test(text))score+=2;
+  if(String(amenity||"")==="restaurant")score+=2;
+  if(bad.some(x=>text.includes(x)))score-=5;
+  return score;
+}
+
+function autoListingNameQuality(name){
+  const s=String(name||"").trim();
+  if(!s)return false;
+  if(s.length<2 || s.length>80)return false;
+  if(/^https?:\/\//i.test(s))return false;
+  if(/^(居酒屋|酒場|焼き鳥|海鮮居酒屋)$/i.test(s))return false;
+  if(/\b(?:求人|スタッフ募集|まとめ|ランキング|公式サイト)\b/i.test(s))return false;
+  return true;
+}
+
+function autoListingContactScore({phone="",website="",instagram=""}={}){
+  let score=0;
+  if(isLikelyJapanesePhone(phone))score+=2;
+  if(safeHttpUrl(website))score+=2;
+  if(kbnHandle(instagram))score+=2;
+  return score;
+}
+
+function autoListingDuplicateScore(existing,{name,address,phone,instagram}){
+  const nkey=normalizePlaceName(name);
+  const addressKey=String(address||"").replace(/\s+/g,"");
+  const phoneKey=normalizePhoneDigits(phone);
+  const igKey=kbnHandle(instagram);
+
+  for(const x of existing){
+    const sameName=nkey && normalizePlaceName(x.name)===nkey;
+    const sameAddress=addressKey && x.address &&
+      String(x.address).replace(/\s+/g,"")===addressKey;
+    const samePhone=phoneKey && x.phone &&
+      normalizePhoneDigits(x.phone)===phoneKey;
+    const sameIg=igKey && x.instagram &&
+      kbnHandle(x.instagram)===igKey;
+
+    if(sameName||sameAddress||samePhone||sameIg)return true;
+  }
+  return false;
+}
+
+
+async function shopSlugExists(env,slug){
+  const row=await env.DB.prepare(
+    "SELECT id,name FROM shops WHERE slug=? LIMIT 1"
+  ).bind(slug).first();
+  return row||null;
+}
+
+function strictAutoListingGate({
+  name,area,address,genre,categories=[],amenity="",
+  phone,website,instagram,
+  sourceMatchScore=0,
+  sourceCount=1
+}={}){
+  const reasons=[];
+  let confidence=0;
+
+  if(!autoListingNameQuality(name))reasons.push("NAME_WEAK");
+  else confidence+=2;
+
+  if(!isKumamotoAddress(address,area))reasons.push("ADDRESS_NOT_CONFIRMED");
+  else confidence+=3;
+
+  const barStrength=autoListingBarStrength({name,genre,categories,amenity});
+  if(barStrength<3)reasons.push("IZAKAYA_CATEGORY_WEAK");
+  else confidence+=Math.min(4,barStrength);
+
+  const contactScore=autoListingContactScore({phone,website,instagram});
+  if(contactScore<2)reasons.push("NO_RELIABLE_CONTACT");
+  else confidence+=Math.min(4,contactScore);
+
+  if(Number(sourceMatchScore||0)>=90)confidence+=3;
+  else if(Number(sourceMatchScore||0)>=80)confidence+=1;
+  else if(sourceCount<=1)reasons.push("SOURCE_MATCH_WEAK");
+
+  if(sourceCount>=2)confidence+=3;
+
+  // Strict threshold: missing any core requirement blocks auto-listing.
+  const coreBlocked=reasons.some(r=>
+    ["NAME_WEAK","ADDRESS_NOT_CONFIRMED","IZAKAYA_CATEGORY_WEAK","NO_RELIABLE_CONTACT"].includes(r)
+  );
+
+  const approved=!coreBlocked && confidence>=10;
+
+  return {
+    approved,
+    confidence,
+    reasons,
+    izakaya_strength:barStrength,
+    contact_score:contactScore
+  };
+}
+
+async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit=3){
   await ensureLeadDiscoveryTables(env);
-  const listedR=await env.DB.prepare("SELECT instagram FROM shops WHERE instagram IS NOT NULL AND instagram<>''").all();
-  const listed=new Set((listedR.results||[]).map(x=>kbnHandle(x.instagram)).filter(Boolean));
-  const seenR=await env.DB.prepare("SELECT instagram_handle FROM lead_discovery_seen").all();
-  const seen=new Set((seenR.results||[]).map(x=>String(x.instagram_handle||"").toLowerCase()));
-  const pairs=await autoDiscoveryPairs(env,pairLimit);
-  const created=[],searched=[];
+
+  const osmSnap=await fetchKumamotoOsmBars(env);
+  const geoSnap=await fetchKumamotoGeoapifyBars(env);
+  const fsqConfigured=!!foursquareConfig(env).apiKey;
+  const googleConfigured=!!googlePlacesConfig(env).apiKey;
+
+  if(!googleConfigured&&!fsqConfigured&&!geoSnap.ok&&!osmSnap.ok){
+    return {
+      ok:false,error:"DISCOVERY_SOURCES_UNAVAILABLE",
+      created:[],searched:[],rejected:[]
+    };
+  }
+
+  const pairs=await autoDiscoveryPairs(env,Math.max(1,Math.min(Number(pairLimit)||15,20)));
+  const created=[],searched=[],rejected=[];
+  const existingR=await env.DB.prepare(
+    "SELECT id,name,address,phone,instagram FROM shops"
+  ).all();
+  const existing=existingR.results||[];
+
   for(const pair of pairs){
     if(created.length>=maxListings)break;
-    const d=await searchInstagramLeads(env,{area:pair.area,type:pair.type,start:1});
-    searched.push({area:pair.area,type:pair.label,ok:!!d.ok,found:(d.leads||[]).length});
-    await env.DB.prepare("INSERT INTO lead_discovery_runs(area,lead_type,searched_at) VALUES(?,?,CURRENT_TIMESTAMP)").bind(pair.area,pair.type).run();
-    if(!d.ok)continue;
 
-    let pairCreated=0;
+    const query=[pair.area,"熊本県",pair.label||"居酒屋"].filter(Boolean).join(" ");
 
-    for(const lead of (d.leads||[])){
-      if(pairCreated>=perPairLimit)break;
-      if(created.length>=maxListings)break;
-      const h=kbnHandle(lead.handle);
-      if(!h || listed.has(h) || seen.has(h) || !likelyBar(lead))continue;
-      const name=t(lead.title||h,150)||h;
-      const area=t(inferLeadArea(lead,lead.area||pair.area),80)||pair.area;
-      const genre=t(lead.type||pair.label,120)||pair.label;
-      const meta=extractPublicMetadata(lead);
+    const googleSearch=googleConfigured
+      ? await googlePlacesTextSearch(env,{query,pageSize:20})
+      : {ok:false,configured:false,places:[],error:"GOOGLE_PLACES_NOT_CONFIGURED"};
 
-      const descBase=t(lead.snippet,2000);
-      const desc=(descBase?descBase+"\n\n":"")+
-        "※本ページは、公開されている情報をもとにKUMAMOTO BAR NAVIが独自に掲載しています。"+
+    const fsqSearch=fsqConfigured
+      ? await foursquareSearch(env,{
+          query:pair.label||"居酒屋",
+          near:[pair.area,"熊本県","日本"].filter(Boolean).join(", "),
+          limit:20
+        })
+      : {ok:false,configured:false,results:[],error:"FOURSQUARE_NOT_CONFIGURED"};
+
+    const googleCandidates=googleSearch.ok
+      ? (googleSearch.places||[]).filter(googlePlaceLooksLikeBar)
+      : [];
+
+    const fsqCandidates=fsqSearch.ok
+      ? (fsqSearch.results||[]).filter(fsqLooksLikeBar)
+      : [];
+
+    const geoCandidates=geoSnap.ok
+      ? geoSnap.features.filter(feature=>{
+          const addr=geoAddress(feature);
+          const hint=geoAreaHint(feature);
+          return (!pair.area||addr.includes(pair.area)||hint.includes(pair.area))&&geoLooksLikeBar(feature);
+        })
+      : [];
+
+    const osmCandidates=osmSnap.ok
+      ? osmSnap.places.filter(place=>{
+          const addr=osmAddress(place);
+          const hint=osmAreaHint(place);
+          return (!pair.area||addr.includes(pair.area)||hint.includes(pair.area))&&osmPlaceLooksLikeBar(place);
+        })
+      : [];
+
+    searched.push({
+      area:pair.area,
+      type:pair.label,
+      ok:googleSearch.ok||fsqSearch.ok||geoSnap.ok||osmSnap.ok,
+      raw_found:Array.isArray(googleSearch.places)?googleSearch.places.length:0,
+      google_found:googleCandidates.length,
+      fsq_found:fsqCandidates.length,
+      geo_found:geoCandidates.length,
+      osm_found:osmCandidates.length,
+      error:googleSearch.ok?"":(googleSearch.error||""),
+      source:[
+        googleSearch.ok?"google_places":"",
+        fsqSearch.ok?"foursquare":"",
+        geoSnap.ok?"geoapify":"",
+        osmSnap.ok?"osm":""
+      ].filter(Boolean).join("+"),
+      query
+    });
+
+    await env.DB.prepare(
+      "INSERT INTO lead_discovery_runs(area,lead_type,searched_at) VALUES(?,?,CURRENT_TIMESTAMP)"
+    ).bind(pair.area,pair.type).run();
+
+    let made=0;
+
+    // --------------------------------------------------------
+    // 1) Google candidates first
+    // --------------------------------------------------------
+    for(const g of googleCandidates){
+      if(made>=perPairLimit||created.length>=maxListings)break;
+
+      let gName=t(googlePlaceName(g),150);
+      let gAddress=t(googlePlaceAddress(g),500);
+      if(!gName||!gAddress)continue;
+      if(!gAddress.includes("熊本")){
+        rejected.push({name:gName,reason:"OUTSIDE_KUMAMOTO",source:"google_places"});
+        continue;
+      }
+
+      // 候補として通った店舗だけPlace Detailsを取得（コスト節約）
+      const gDetails=await googlePlaceDetails(env,g.id);
+      const gp=gDetails.ok&&gDetails.place?gDetails.place:g;
+      gName=t(googlePlaceName(gp)||gName,150);
+      gAddress=t(googlePlaceAddress(gp)||gAddress,500);
+
+      // Find best secondary match for richer fields.
+      const secondary=findBestSecondaryForGoogle({
+        googlePlace:g,
+        fsqResults:fsqCandidates,
+        geoFeatures:geoCandidates,
+        osmPlaces:osmCandidates
+      });
+
+      let sourceKind=gDetails.ok?"google_place_details":"google_places";
+      let sourcePlace=null;
+      let address=gAddress;
+      let phone=t(googlePhone(gp)||"",80);
+      let website=googleWebsite(gp);
+      let instagram="";
+      let hours=t(googleOpeningHours(gp)||"",800);
+      let holiday=t(googleHolidayFromHours(gp)||"",180);
+      let features=googleDetailFeatures(gp)||googlePlaceTypes(gp).join("、");
+      let genre=(()=>{
+        const tx=`${gName} ${googlePlaceTypes(gp).join(" ")}`.toLowerCase();
+        if(/焼き鳥|yakitori|串/.test(tx))return "焼き鳥";
+        if(/海鮮|刺身|seafood|fish/.test(tx))return "海鮮居酒屋";
+        if(/馬刺/.test(tx))return "馬刺し";
+        if(/郷土/.test(tx))return "郷土料理";
+        if(/もつ鍋/.test(tx))return "もつ鍋";
+        if(/炉端/.test(tx))return "炉端";
+        if(/焼肉|yakiniku|bbq/.test(tx))return "焼肉";
+        return "居酒屋";
+      })();
+      let sourceCount=1;
+      let matchScore=googlePlaceScore(g,{name:gName,area:pair.area});
+
+      if(secondary){
+        sourceKind=`${gDetails.ok?"google_place_details":"google_places"}+${secondary.kind}`;
+        sourceCount=2;
+        matchScore=Math.max(matchScore,Number(secondary.score||0));
+        sourcePlace=secondary.place;
+
+        if(secondary.kind==="foursquare"){
+          address=fsqAddress(sourcePlace)||address;
+          phone=phone||fsqPhone(sourcePlace)||"";
+          website=website||fsqWebsite(sourcePlace)||"";
+          instagram=fsqInstagram(sourcePlace)||"";
+          hours=hours||fsqHours(sourcePlace)||"";
+          features=extractFeaturesInfo(`${fsqCategories(sourcePlace).join(" ")} ${gName}`)||features;
+        }else if(secondary.kind==="geoapify"){
+          address=geoAddress(sourcePlace)||address;
+          phone=phone||geoPhone(sourcePlace)||"";
+          website=website||geoWebsite(sourcePlace)||"";
+          instagram=geoInstagram(sourcePlace)||"";
+          hours=hours||geoHours(sourcePlace)||"";
+          features=extractFeaturesInfo(`${geoCategories(sourcePlace).join(" ")} ${gName}`)||features;
+        }else if(secondary.kind==="osm"){
+          address=osmAddress(sourcePlace)||address;
+          phone=phone||osmPhone(sourcePlace)||"";
+          website=website||osmWebsite(sourcePlace)||"";
+          instagram=osmInstagram(sourcePlace)||"";
+          hours=hours||osmHours(sourcePlace)||"";
+          holiday=holiday||osmHoliday(sourcePlace)||"";
+          features=osmFeatures(sourcePlace)||features;
+        }
+      }
+
+      if(autoListingDuplicateScore(existing,{
+        name:gName,address,phone,instagram
+      })){
+        rejected.push({name:gName,reason:"DUPLICATE",source:sourceKind});
+        continue;
+      }
+
+      const area=inferKumamotoAreaFromText(address,pair.area);
+      const gate=strictAutoListingGate({
+        name:gName,
+        area,
+        address,
+        genre,
+        categories:googlePlaceTypes(g),
+        amenity:"",
+        phone,
+        website,
+        instagram,
+        sourceMatchScore:matchScore,
+        sourceCount
+      });
+
+      // Google itself is trusted for existence/address/type.
+      // Secondary source increases confidence but is not mandatory.
+      if(sourceCount>=2)gate.confidence+=2;
+      if(!gate.approved){
+        const coreBlocked=gate.reasons.some(r=>
+          ["NAME_WEAK","ADDRESS_NOT_CONFIRMED","IZAKAYA_CATEGORY_WEAK"].includes(r)
+        );
+        if(!coreBlocked && googlePlaceLooksLikeBar(g) && gAddress.includes("熊本")){
+          gate.approved=true;
+        }
+      }
+
+      if(!gate.approved){
+        rejected.push({
+          name:gName,area,
+          reason:gate.reasons.join(",")||"LOW_CONFIDENCE",
+          confidence:gate.confidence,
+          source:sourceKind
+        });
+        continue;
+      }
+
+      const webMeta=website?await fetchOfficialWebsiteMetadata(website):
+        {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:"",instagram:""};
+
+      if(!instagram && webMeta.instagram)instagram=webMeta.instagram;
+      if(!instagram){
+        const ig=await discoverInstagramForShop(env,{name:gName,area,website,existing:""});
+        if(ig?.instagram && Number(ig.score||0)>=90){
+          instagram=ig.instagram;
+          sourceKind+=`+instagram:${ig.source}`;
+        }
+      }
+
+      const googlePrice=googlePriceInfo(gp);
+      let sourceMin=googlePrice.min,sourceMax=googlePrice.max;
+      if(sourcePlace){
+        if(secondary?.kind==="foursquare"){
+          const p=extractPriceInfo(JSON.stringify(sourcePlace));
+          sourceMin=p.min; sourceMax=p.max;
+        }else if(secondary?.kind==="geoapify"){
+          const p=extractPriceInfo(JSON.stringify(geoFeatureProps(sourcePlace)));
+          sourceMin=p.min; sourceMax=p.max;
+        }else if(secondary?.kind==="osm"){
+          const p=extractPublicMetadata(sourcePlace);
+          sourceMin=p.budget_min; sourceMax=p.budget_max;
+        }
+      }
+
+      const finalHours=hours||webMeta.hours||"";
+      const finalHoliday=holiday||webMeta.holiday||"";
+      const finalFeatures=[features,webMeta.features].filter(Boolean).join("、");
+      const budgetMin=webMeta.price?.min??sourceMin??null;
+      const budgetMax=webMeta.price?.max??sourceMax??null;
+
+      const desc=
+        "※本ページは、公開されている店舗情報をもとにKUMAMOTO IZAKAYA NAVIが独自に掲載しています。"+
         "掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。";
 
-      const slug=slugify(name);
+      const slug=slugify(gName);
+
+      const slugExisting=await shopSlugExists(env,slug);
+      if(slugExisting){
+        rejected.push({
+          name:gName,area,reason:"DUPLICATE_SLUG",source:sourceKind,
+          existing_shop_id:Number(slugExisting.id||0)
+        });
+        continue;
+      }
+
       const ins=await env.DB.prepare(`
         INSERT INTO shops(
           slug,name,name_kana,area,address,hours,holiday,instagram,genre,features,description,
@@ -1343,38 +3074,183 @@ async function autoDiscover(env,request,maxListings=10,pairLimit=6,perPairLimit=
           is_featured,is_new,sort_order,listing_status,published_at
         ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'provisional',CURRENT_TIMESTAMP)
       `).bind(
-        slug,name,"",area,"",meta.hours,meta.holiday,
-        `https://www.instagram.com/${h}/`,genre,meta.features,desc,
-        meta.budget_min,meta.budget_max,null,"",0,1,"","",0,1,100
+        slug,gName,"",area,address,finalHours,finalHoliday,instagram,
+        genre,finalFeatures,desc,budgetMin,budgetMax,null,phone,
+        0,1,"","",0,1,100
       ).run();
+
       const id=Number(ins.meta?.last_row_id||0);
-      const token=ownerToken(), hash=await sha256hex(token);
-      await env.DB.prepare("UPDATE shops SET owner_token_hash=?,owner_token_created_at=CURRENT_TIMESTAMP WHERE id=?").bind(hash,id).run();
-      await env.DB.prepare(`
-        INSERT INTO lead_discovery_seen(instagram_handle,source_area,source_type,status)
-        VALUES(?,?,?,'provisional_listed')
-      `).bind(h,area,pair.type).run();
-      listed.add(h);seen.add(h);
+      const token=ownerToken(),hash=await sha256hex(token);
+      await env.DB.prepare(
+        "UPDATE shops SET owner_token_hash=?,owner_token_created_at=CURRENT_TIMESTAMP WHERE id=?"
+      ).bind(hash,id).run();
+
+      const autoPhotoName=googlePhotoName(gp);
+      if(autoPhotoName){
+        await env.DB.prepare("UPDATE shops SET image_url=?,image_key=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
+          .bind(googlePhotoProxyUrl(id),`google:${autoPhotoName}`,id).run();
+      }
+
+      existing.push({id,name:gName,address,phone,instagram});
+
       const origin=new URL(request.url).origin;
       created.push({
         shop_id:id,
-        name,
-        handle:h,
-        area,
-        genre,
-        hours:meta.hours,
-        holiday:meta.holiday,
-        budget_min:meta.budget_min,
-        budget_max:meta.budget_max,
+        name:gName,
+        area,genre,address,phone,
+        hours:finalHours,holiday:finalHoliday,
+        budget_min:budgetMin,budget_max:budgetMax,
+        auto_confidence:gate.confidence,
+        source_count:sourceCount,
+        source:sourceKind,
+        google_place_id:String(g.id||""),
         public_url:`${origin}/shop.html?slug=${encodeURIComponent(slug)}`
       });
+      made++;
+    }
 
-      pairCreated++;
+    // --------------------------------------------------------
+    // 2) Google unavailable/no candidates -> secondary fallback
+    // --------------------------------------------------------
+    if(made<perPairLimit && created.length<maxListings && !googleCandidates.length){
+      const fallback=[
+        ...fsqCandidates.map(place=>({kind:"foursquare",place})),
+        ...geoCandidates.map(place=>({kind:"geoapify",place})),
+        ...osmCandidates.map(place=>({kind:"osm",place}))
+      ];
+
+      for(const item of fallback){
+        if(made>=perPairLimit||created.length>=maxListings)break;
+
+        const isFsq=item.kind==="foursquare";
+        const isGeo=item.kind==="geoapify";
+        const place=item.place;
+        const name=t(isFsq?fsqName(place):(isGeo?geoName(place):osmPlaceName(place)),150);
+        const address=t(isFsq?fsqAddress(place):(isGeo?geoAddress(place):osmAddress(place)),500);
+        const phone=t(isFsq?fsqPhone(place):(isGeo?geoPhone(place):osmPhone(place)),80);
+        const website=isFsq?fsqWebsite(place):(isGeo?geoWebsite(place):osmWebsite(place));
+        let instagram=isFsq?fsqInstagram(place):(isGeo?geoInstagram(place):osmInstagram(place));
+        if(!name||!address||!address.includes("熊本"))continue;
+
+        if(!instagram){
+          const ig=await discoverInstagramForShop(env,{name,area:pair.area,website,existing:""});
+          if(ig?.instagram && Number(ig.score||0)>=90)instagram=ig.instagram;
+        }
+
+        if(autoListingDuplicateScore(existing,{name,address,phone,instagram}))continue;
+
+        const slug=slugify(name);
+        if(await shopSlugExists(env,slug)){
+          rejected.push({name,reason:"DUPLICATE_SLUG",source:item.kind});
+          continue;
+        }
+
+        const categories=isFsq?fsqCategories(place):(isGeo?geoCategories(place):[]);
+        const amenity=(isFsq||isGeo)?"":String(osmTags(place).amenity||"");
+        const genre=t((()=>{
+          const tx=`${name} ${categories.join(" ")} ${amenity}`.toLowerCase();
+          if(/焼き鳥|yakitori|串/.test(tx))return "焼き鳥";
+          if(/海鮮|刺身|seafood|fish/.test(tx))return "海鮮居酒屋";
+          if(/馬刺/.test(tx))return "馬刺し";
+          if(/郷土/.test(tx))return "郷土料理";
+          if(/もつ鍋/.test(tx))return "もつ鍋";
+          if(/炉端/.test(tx))return "炉端";
+          if(/焼肉|yakiniku|bbq/.test(tx))return "焼肉";
+          return "居酒屋";
+        })(),120);
+
+        const gate=strictAutoListingGate({
+          name,area:pair.area,address,genre,categories,amenity,
+          phone,website,instagram,sourceMatchScore:90,sourceCount:1
+        });
+        if(!gate.approved)continue;
+
+        const sourceHours=isFsq?fsqHours(place):(isGeo?geoHours(place):osmHours(place));
+        const sourceHoliday=(isFsq||isGeo)?"":osmHoliday(place);
+        const sourceFeatures=isFsq
+          ? extractFeaturesInfo(`${categories.join(" ")} ${name}`)
+          :isGeo
+            ? extractFeaturesInfo(`${categories.join(" ")} ${name}`)
+            :osmFeatures(place);
+
+        const webMeta=website?await fetchOfficialWebsiteMetadata(website):
+          {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
+
+        const sourcePrice=isFsq
+          ? extractPriceInfo(JSON.stringify(place))
+          :isGeo
+            ? extractPriceInfo(JSON.stringify(geoFeatureProps(place)))
+            :extractPublicMetadata(place);
+
+        const sourceMin=(isFsq||isGeo)?sourcePrice.min:sourcePrice.budget_min;
+        const sourceMax=(isFsq||isGeo)?sourcePrice.max:sourcePrice.budget_max;
+
+        const area=inferKumamotoAreaFromText(address,pair.area);
+        const finalHours=sourceHours||webMeta.hours||"";
+        const finalHoliday=sourceHoliday||webMeta.holiday||"";
+        const finalFeatures=[sourceFeatures,webMeta.features].filter(Boolean).join("、");
+        const budgetMin=webMeta.price?.min??sourceMin??null;
+        const budgetMax=webMeta.price?.max??sourceMax??null;
+
+        const desc=
+          "※本ページは、公開されている店舗情報をもとにKUMAMOTO IZAKAYA NAVIが独自に掲載しています。"+
+          "掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。";
+
+        const ins=await env.DB.prepare(`
+          INSERT INTO shops(
+            slug,name,name_kana,area,address,hours,holiday,instagram,genre,features,description,
+            budget_min,budget_max,seats,phone,is_recruiting,is_published,image_url,image_key,
+            is_featured,is_new,sort_order,listing_status,published_at
+          ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'provisional',CURRENT_TIMESTAMP)
+        `).bind(
+          slug,name,"",area,address,finalHours,finalHoliday,instagram,
+          genre,finalFeatures,desc,budgetMin,budgetMax,null,phone,
+          0,1,"","",0,1,100
+        ).run();
+
+        const id=Number(ins.meta?.last_row_id||0);
+        const token=ownerToken(),hash=await sha256hex(token);
+        await env.DB.prepare(
+          "UPDATE shops SET owner_token_hash=?,owner_token_created_at=CURRENT_TIMESTAMP WHERE id=?"
+        ).bind(hash,id).run();
+
+        existing.push({id,name,address,phone,instagram});
+        const origin=new URL(request.url).origin;
+        created.push({
+          shop_id:id,name,area,genre,address,phone,
+          hours:finalHours,holiday:finalHoliday,
+          budget_min:budgetMin,budget_max:budgetMax,
+          auto_confidence:gate.confidence,
+          source_count:1,
+          source:item.kind,
+          public_url:`${origin}/shop.html?slug=${encodeURIComponent(slug)}`
+        });
+        made++;
+      }
     }
   }
-  return {ok:true,created,searched};
-}
 
+  const rejectSummary=rejected.reduce((acc,x)=>{
+    const k=String(x.reason||"UNKNOWN");
+    acc[k]=(acc[k]||0)+1;
+    return acc;
+  },{});
+
+  return {
+    ok:true,
+    created,
+    searched,
+    rejected:rejected.slice(0,100),
+    rejected_count:rejected.length,
+    reject_summary:rejectSummary,
+    provider:googleConfigured
+      ?"google_places_foursquare_geoapify_osm"
+      :(fsqConfigured?"foursquare_geoapify_osm":"geoapify_osm"),
+    google_configured:googleConfigured,
+    foursquare_configured:fsqConfigured,
+    geoapify_configured:!!geoSnap.configured
+  };
+}
 async function ensureListingStatusColumn(env){
   if(!env.DB)return;
   try{
@@ -1401,7 +3277,7 @@ function publicShopRow(s){
     ...s,
     listing_status:provisional?"provisional":"published",
     is_provisional:provisional?1:0,
-    name:provisional?`【KBN独自掲載】${s.name}`:s.name
+    name:provisional?`【KIN独自掲載】${s.name}`:s.name
   };
 }
 
@@ -1546,7 +3422,7 @@ function kbnSeoEsc(v){
   return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 function kbnCleanShopName(v){
-  return String(v||"").replace(/^【KBN独自掲載】/,"")
+  return String(v||"").replace(/^【KIN独自掲載】/,"")
     .replace(/\s*[（(]\s*@[A-Za-z0-9._]+\s*[）)]\s*$/,"")
     .replace(/\s+@[A-Za-z0-9._]+\s*$/,"").trim();
 }
@@ -1572,18 +3448,18 @@ async function renderLocalSeoAreaPage(env,slug){
     shops=r.results||[];
   }catch(e){ console.error("local seo area query",e); }
 
-  const canonical=`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/area/${slug}`;
-  const title=`${area}のBAR・バー一覧｜料金・営業時間・求人情報｜KUMAMOTO BAR NAVI`;
-  const description=`${area}のBAR・バーを探すならKUMAMOTO BAR NAVI。${shops.length?`現在${shops.length}店舗を掲載。`:""}料金、営業時間、ジャンル、特徴、求人情報を確認できます。`;
+  const canonical=`https://kumamoto-izakaya-navi.rrwpvwmz8p.workers.dev/area/${slug}`;
+  const title=`${area}の居酒屋一覧｜料金・営業時間・求人情報｜KUMAMOTO IZAKAYA NAVI`;
+  const description=`${area}の居酒屋を探すならKUMAMOTO IZAKAYA NAVI。${shops.length?`現在${shops.length}店舗を掲載。`:""}料金、営業時間、ジャンル、特徴、求人情報を確認できます。`;
 
   const cards=shops.map(s=>{
-    const name=kbnCleanShopName(s.name)||"BAR";
+    const name=kbnCleanShopName(s.name)||"居酒屋";
     const budget=kbnBudget(s);
     return `<article class="local-seo-card">
       <a href="/shop.html?slug=${encodeURIComponent(s.slug||"")}">
         <div class="local-seo-img">${s.image_url?`<img src="${kbnSeoEsc(s.image_url)}" alt="${kbnSeoEsc(name)} ${kbnSeoEsc(area)} BAR" loading="lazy">`:`<img src="/default-bar.svg" alt="" loading="lazy">`}</div>
         <div class="local-seo-body">
-          <div class="local-seo-meta"><span>${kbnSeoEsc(s.genre||"BAR")}</span>${s.listing_status==="provisional"?"<small>KBN独自掲載</small>":""}</div>
+          <div class="local-seo-meta"><span>${kbnSeoEsc(s.genre||"居酒屋")}</span>${s.listing_status==="provisional"?"<small>KIN独自掲載</small>":""}</div>
           <h2>${kbnSeoEsc(name)}</h2>
           ${s.address?`<p>${kbnSeoEsc(s.address)}</p>`:""}
           <div class="local-seo-facts">
@@ -1599,12 +3475,12 @@ async function renderLocalSeoAreaPage(env,slug){
   const faq=[
     [`${area}のBARはどうやって探せますか？`,`このページで${area}に掲載されているBARを一覧で確認できます。`],
     [`${area}のBARの料金や営業時間は確認できますか？`,`各店舗ページで公開されている料金目安、営業時間、住所などを掲載しています。`],
-    [`${area}のBAR求人も探せますか？`,`求人情報が登録されている店舗はKUMAMOTO BAR NAVIの求人ページから確認できます。`]
+    [`${area}のBAR求人も探せますか？`,`求人情報が登録されている店舗はKUMAMOTO IZAKAYA NAVIの求人ページから確認できます。`]
   ];
-  const itemList=shops.slice(0,50).map((s,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(s.name),"url":`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html?slug=${encodeURIComponent(s.slug||"")}`}));
+  const itemList=shops.slice(0,50).map((s,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(s.name),"url":`https://kumamoto-izakaya-navi.rrwpvwmz8p.workers.dev/shop.html?slug=${encodeURIComponent(s.slug||"")}`}));
   const jsonLd={"@context":"https://schema.org","@graph":[
-    {"@type":"CollectionPage","name":`${area}のBAR・バー一覧`,"url":canonical,"description":description},
-    {"@type":"ItemList","name":`${area}のBAR一覧`,"numberOfItems":shops.length,"itemListElement":itemList},
+    {"@type":"CollectionPage","name":`${area}の居酒屋一覧`,"url":canonical,"description":description},
+    {"@type":"ItemList","name":`${area}の居酒屋一覧`,"numberOfItems":shops.length,"itemListElement":itemList},
     {"@type":"FAQPage","mainEntity":faq.map(x=>({"@type":"Question","name":x[0],"acceptedAnswer":{"@type":"Answer","text":x[1]}}))}
   ]};
 
@@ -1614,12 +3490,173 @@ async function renderLocalSeoAreaPage(env,slug){
 <meta name="robots" content="index,follow,max-image-preview:large"><link rel="stylesheet" href="/style.css?v=118">
 <script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g,"\\u003c")}</script></head>
 <body class="public-v109 local-seo-page">
-<header class="public-header"><div class="container public-header-inner"><a class="public-brand" href="/"><img src="/logo.png" alt="KUMAMOTO BAR NAVI"><span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span></a><nav class="public-desktop-nav"><a href="/bars.html">BARを探す</a><a href="/areas.html" class="active">エリア</a><a href="/jobs.html">求人</a><a href="/column.html">コラム</a></nav><a class="public-header-cta" href="/bars.html">BARを探す</a></div></header>
-<main><section class="local-seo-hero"><div class="container"><nav class="local-seo-breadcrumb"><a href="/">ホーム</a><span>›</span><a href="/areas.html">エリア</a><span>›</span><b>${kbnSeoEsc(area)}</b></nav><p class="public-kicker">KUMAMOTO AREA GUIDE</p><h1>${kbnSeoEsc(area)}のBAR・バー</h1><p>${kbnSeoEsc(area)}で今夜行きたいBARを探せます。営業時間・料金・ジャンルを比較して自分に合う一軒を見つけてください。</p><div class="local-seo-count"><strong>${shops.length}</strong><span>店舗掲載中</span></div></div></section>
-<section class="local-seo-list"><div class="container"><div class="local-seo-head"><div><p class="public-kicker">BAR LIST</p><h2>${kbnSeoEsc(area)}のBAR一覧</h2></div><a href="/bars.html?area=${encodeURIComponent(area)}">絞り込み検索 →</a></div>${shops.length?`<div class="local-seo-grid">${cards}</div>`:`<div class="local-seo-empty"><h2>${kbnSeoEsc(area)}の掲載店舗を準備中です</h2><p>店舗情報を順次追加しています。</p></div>`}</div></section>
-<section class="local-seo-guide"><div class="container"><p class="public-kicker">AREA GUIDE</p><h2>${kbnSeoEsc(area)}でBARを探す</h2><p>${kbnSeoEsc(area)}のBAR選びでは、営業時間や料金だけでなく、ダーツ・カラオケ・ワイン・シーシャなど店舗ごとの特徴を比べるのがおすすめです。</p></div></section>
+<header class="public-header"><div class="container public-header-inner"><a class="public-brand" href="/"><img src="/logo.png" alt="KUMAMOTO IZAKAYA NAVI"><span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>IZAKAYA & JOB INFORMATION</small></span></a><nav class="public-desktop-nav"><a href="/bars.html">居酒屋を探す</a><a href="/areas.html" class="active">エリア</a><a href="/jobs.html">求人</a><a href="/column.html">コラム</a></nav><a class="public-header-cta" href="/bars.html">居酒屋を探す</a></div></header>
+<main><section class="local-seo-hero"><div class="container"><nav class="local-seo-breadcrumb"><a href="/">ホーム</a><span>›</span><a href="/areas.html">エリア</a><span>›</span><b>${kbnSeoEsc(area)}</b></nav><p class="public-kicker">KUMAMOTO AREA GUIDE</p><h1>${kbnSeoEsc(area)}の居酒屋</h1><p>${kbnSeoEsc(area)}で今夜行きたいBARを探せます。営業時間・料金・ジャンルを比較して自分に合う一軒を見つけてください。</p><div class="local-seo-count"><strong>${shops.length}</strong><span>店舗掲載中</span></div></div></section>
+<section class="local-seo-list"><div class="container"><div class="local-seo-head"><div><p class="public-kicker">IZAKAYA LIST</p><h2>${kbnSeoEsc(area)}の居酒屋一覧</h2></div><a href="/bars.html?area=${encodeURIComponent(area)}">絞り込み検索 →</a></div>${shops.length?`<div class="local-seo-grid">${cards}</div>`:`<div class="local-seo-empty"><h2>${kbnSeoEsc(area)}の掲載店舗を準備中です</h2><p>店舗情報を順次追加しています。</p></div>`}</div></section>
+<section class="local-seo-guide"><div class="container"><p class="public-kicker">AREA GUIDE</p><h2>${kbnSeoEsc(area)}で居酒屋を探す</h2><p>${kbnSeoEsc(area)}のBAR選びでは、営業時間や料金だけでなく、ダーツ・カラオケ・ワイン・シーシャなど店舗ごとの特徴を比べるのがおすすめです。</p></div></section>
 <section class="local-seo-faq"><div class="container"><p class="public-kicker">FAQ</p><h2>${kbnSeoEsc(area)}のBAR探し よくある質問</h2><div>${faq.map(x=>`<details><summary>${kbnSeoEsc(x[0])}</summary><p>${kbnSeoEsc(x[1])}</p></details>`).join("")}</div></div></section>
-</main><nav class="public-bottom-nav"><a href="/"><span>⌂</span><b>ホーム</b></a><a href="/bars.html"><span>⌕</span><b>BARを探す</b></a><a href="/jobs.html"><span>▣</span><b>求人</b></a><a href="/listing-form.html"><span>＋</span><b>店舗掲載</b></a></nav></body></html>`;
+</main><nav class="public-bottom-nav"><a href="/"><span>⌂</span><b>ホーム</b></a><a href="/bars.html"><span>⌕</span><b>居酒屋を探す</b></a><a href="/jobs.html"><span>▣</span><b>求人</b></a><a href="/listing-form.html"><span>＋</span><b>店舗掲載</b></a></nav></body></html>`;
+}
+
+
+async function ensureShopMaintenanceStatusColumn(env){
+  try{
+    await env.DB.prepare("ALTER TABLE shops ADD COLUMN business_status TEXT").run();
+  }catch(e){
+    const msg=String(e?.message||e||"").toLowerCase();
+    if(!msg.includes("duplicate column")&&!msg.includes("already exists"))throw e;
+  }
+}
+
+async function setShopMaintenanceAction(env,shopId,action){
+  await ensureShopMaintenanceStatusColumn(env);
+  const id=Math.max(1,Number(shopId)||0);
+  const act=String(action||"");
+
+  if(act==="operational"){
+    await env.DB.prepare(`
+      UPDATE shops
+      SET business_status='OPERATIONAL',is_published=1,updated_at=CURRENT_TIMESTAMP
+      WHERE id=?
+    `).bind(id).run();
+  }else if(act==="temporary_closed"){
+    await env.DB.prepare(`
+      UPDATE shops
+      SET business_status='CLOSED_TEMPORARILY',is_published=1,updated_at=CURRENT_TIMESTAMP
+      WHERE id=?
+    `).bind(id).run();
+  }else if(act==="unpublish"){
+    await env.DB.prepare(`
+      UPDATE shops
+      SET business_status='UNPUBLISHED',is_published=0,updated_at=CURRENT_TIMESTAMP
+      WHERE id=?
+    `).bind(id).run();
+  }else{
+    throw new Error("INVALID_MAINTENANCE_ACTION");
+  }
+
+  return await env.DB.prepare(`
+    SELECT id,slug,name,area,is_published,business_status
+    FROM shops WHERE id=? LIMIT 1
+  `).bind(id).first();
+}
+
+async function ensureKbnAlertsTable(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_admin_alerts(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      alert_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT,
+      shop_id INTEGER,
+      is_read INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+}
+
+async function createKbnAlert(env,{type,title,message="",shopId=null}){
+  await ensureKbnAlertsTable(env);
+  await env.DB.prepare(`
+    INSERT INTO kbn_admin_alerts(alert_type,title,message,shop_id,is_read,created_at)
+    VALUES(?,?,?,?,0,CURRENT_TIMESTAMP)
+  `).bind(
+    String(type||"info").slice(0,50),
+    String(title||"お知らせ").slice(0,180),
+    String(message||"").slice(0,2000),
+    shopId===null?null:Number(shopId)
+  ).run();
+}
+
+async function notifyCreatedShops(env,created,sourceLabel="自動開拓"){
+  const rows=Array.isArray(created)?created:[];
+  for(const x of rows.slice(0,30)){
+    await createKbnAlert(env,{
+      type:"new_shop",
+      title:`新店舗を自動掲載: ${x.name||"店舗"}`,
+      message:`${sourceLabel}で新しい店舗をKIN独自掲載しました。${x.area?` エリア: ${x.area}`:""}${x.genre?` / ${x.genre}`:""}`,
+      shopId:x.shop_id||null
+    });
+  }
+}
+
+async function checkClosedShops(env,{limit=20,afterId=0}={}){
+  await ensureKbnAlertsTable(env);
+  await ensureShopMaintenanceStatusColumn(env);
+  const max=Math.max(1,Math.min(Number(limit)||20,50));
+  const cursor=Math.max(0,Number(afterId)||0);
+  const r=await env.DB.prepare(`
+    SELECT id,name,area,address,listing_status,is_published
+    FROM shops
+    WHERE is_published=1 AND id>?
+    ORDER BY id ASC
+    LIMIT ?
+  `).bind(cursor,max).all();
+
+  const checked=[],closed=[],failed=[];
+  for(const shop of (r.results||[])){
+    try{
+      const found=await findGooglePlaceForShop(env,{
+        name:String(shop.name||"").replace(/^【KIN独自掲載】/,"").trim(),
+        area:shop.area||"熊本"
+      });
+      if(!found.ok||!found.matched){
+        failed.push({id:shop.id,name:shop.name,reason:found.error||"GOOGLE_MATCH_NOT_FOUND"});
+        continue;
+      }
+      const details=await googlePlaceDetails(env,found.place?.id);
+      const gp=details.ok&&details.place?details.place:found.place;
+      const status=String(gp?.businessStatus||"").toUpperCase();
+      checked.push({id:shop.id,name:shop.name,business_status:status||"UNKNOWN"});
+      if(status==="CLOSED_PERMANENTLY"||status==="CLOSED_TEMPORARILY"){
+        const already=await env.DB.prepare(`
+          SELECT id FROM kbn_admin_alerts
+          WHERE alert_type='closed_shop' AND shop_id=? AND is_read=0
+          LIMIT 1
+        `).bind(shop.id).first();
+        if(!already){
+          await createKbnAlert(env,{
+            type:"closed_shop",
+            title:status==="CLOSED_PERMANENTLY"?"閉業の可能性":"一時休業の可能性",
+            message:`Google Placesで「${shop.name}」が${status==="CLOSED_PERMANENTLY"?"閉業":"一時休業"}として確認されました。掲載状態を確認してください。`,
+            shopId:shop.id
+          });
+        }
+        closed.push({id:shop.id,name:shop.name,business_status:status});
+      }
+    }catch(e){
+      failed.push({id:shop.id,name:shop.name,reason:String(e?.message||e||"UNKNOWN").slice(0,300)});
+    }
+  }
+
+  const nextAfterId=(r.results||[]).length?Number(r.results[r.results.length-1].id||0):cursor;
+  const more=await env.DB.prepare(`
+    SELECT id FROM shops WHERE is_published=1 AND id>? ORDER BY id ASC LIMIT 1
+  `).bind(nextAfterId).first();
+
+  return {ok:true,checked,closed,failed,next_after_id:nextAfterId,has_more:!!more};
+}
+
+async function runScheduledKbnMaintenance(env){
+  const fakeRequest=new Request("https://kumamoto-izakaya-navi.rrwpvwmz8p.workers.dev/api/internal/scheduled");
+  const discovery=await autoDiscover(env,fakeRequest,5,5,1);
+  if(discovery?.created?.length){
+    await notifyCreatedShops(env,discovery.created,"予約自動開拓");
+  }
+
+  const missing=await refreshIndependentListings(env,{
+    limit:20,afterId:0,revalidate:true,force:false,missingOnly:true
+  });
+
+  const closed=await checkClosedShops(env,{limit:20,afterId:0});
+
+  await createKbnAlert(env,{
+    type:"scheduled_summary",
+    title:"予約メンテナンス完了",
+    message:`新規掲載 ${discovery?.created?.length||0}店舗 / 情報補完 ${missing?.updated?.length||0}店舗 / 閉業候補 ${closed?.closed?.length||0}店舗`
+  });
+
+  return {discovery,missing,closed};
 }
 
 export default {
@@ -1645,7 +3682,7 @@ export default {
         "Disallow: /owner-portal.html",
         "Disallow: /db-status.html",
         "",
-        "Sitemap: https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/sitemap.xml"
+        "Sitemap: https://kumamoto-izakaya-navi.rrwpvwmz8p.workers.dev/sitemap.xml"
       ].join("\n");
 
       return new Response(body,{
@@ -1656,8 +3693,38 @@ export default {
       });
     }
 
+    const sitemapLastmodDate=value=>{
+      const raw=String(value||"").trim();
+      if(!raw)return "";
+
+      // Google sitemapのlastmodはYYYY-MM-DDだけに統一。
+      // D1のCURRENT_TIMESTAMP形式、ISO形式、旧データの日時形式でも日付部分だけ採用。
+      const m=raw.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+      if(m){
+        const y=Number(m[1]),mo=Number(m[2]),d=Number(m[3]);
+        const dt=new Date(Date.UTC(y,mo-1,d));
+        if(
+          dt.getUTCFullYear()===y &&
+          dt.getUTCMonth()===mo-1 &&
+          dt.getUTCDate()===d
+        ){
+          return `${String(y).padStart(4,"0")}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+        }
+      }
+
+      // Unix秒/ミリ秒などの旧値が混在していても、有効な場合だけ採用。
+      if(/^\d{10,13}$/.test(raw)){
+        const n=Number(raw);
+        const dt=new Date(raw.length===10?n*1000:n);
+        if(!Number.isNaN(dt.getTime()))return dt.toISOString().slice(0,10);
+      }
+
+      // それ以外は無効なlastmodを出さない。
+      return "";
+    };
+
     if(url.pathname==="/sitemap.xml" && request.method==="GET"){
-      const base="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev";
+      const base="https://kumamoto-izakaya-navi.rrwpvwmz8p.workers.dev";
       const urls=[
         {loc:`${base}/`,priority:"1.0",freq:"daily"},
         {loc:`${base}/bars.html`,priority:"0.9",freq:"daily"},
@@ -1729,7 +3796,7 @@ export default {
             if(!s.slug)continue;
             urls.push({
               loc:`${base}/shop.html?slug=${encodeURIComponent(s.slug)}`,
-              lastmod:s.updated_at||"",
+              lastmod:sitemapLastmodDate(s.updated_at),
               priority:"0.8",
               freq:"weekly"
             });
@@ -1750,7 +3817,7 @@ export default {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.map(x=>`  <url>
     <loc>${escXml(x.loc)}</loc>${x.lastmod?`
-    <lastmod>${escXml(String(x.lastmod).replace(" ","T"))}</lastmod>`:""}
+    <lastmod>${escXml(x.lastmod)}</lastmod>`:""}
     <changefreq>${x.freq}</changefreq>
     <priority>${x.priority}</priority>
   </url>`).join("\n")}
@@ -1830,10 +3897,38 @@ ${urls.map(x=>`  <url>
       await ensureListingStatusColumn(env);
     }
 
+    if(url.pathname==="/api/shop-photo" && request.method==="GET"){
+      const id=Math.max(0,Number(url.searchParams.get("id")||0));
+      if(!id)return new Response("Not found",{status:404});
+      const shop=await env.DB.prepare("SELECT image_key FROM shops WHERE id=? AND COALESCE(is_published,1)=1").bind(id).first();
+      const key=String(shop?.image_key||"");
+      if(!key.startsWith("google:"))return new Response("Not found",{status:404});
+      const photoName=key.slice(7);
+      if(!/^places\/[^/]+\/photos\/[^/]+$/.test(photoName))return new Response("Not found",{status:404});
+      const cfg=googlePlacesConfig(env);
+      if(!cfg.apiKey)return new Response("Photo service unavailable",{status:503});
+      const endpoint=`https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=1200&skipHttpRedirect=true&key=${encodeURIComponent(cfg.apiKey)}`;
+      try{
+        const metaRes=await fetch(endpoint,{headers:{"Accept":"application/json"}});
+        if(!metaRes.ok)return new Response("Photo unavailable",{status:metaRes.status});
+        const meta=await metaRes.json();
+        const photoUri=String(meta?.photoUri||"");
+        if(!/^https:\/\//i.test(photoUri))return new Response("Photo unavailable",{status:404});
+        const img=await fetch(photoUri);
+        if(!img.ok)return new Response("Photo unavailable",{status:img.status});
+        const h=new Headers(img.headers);
+        h.set("Cache-Control","public, max-age=86400, stale-while-revalidate=604800");
+        h.delete("set-cookie");
+        return new Response(img.body,{status:200,headers:h});
+      }catch(e){
+        return new Response("Photo unavailable",{status:502});
+      }
+    }
+
     if(url.pathname==="/api/shops" && request.method==="GET"){
       const r=await env.DB.prepare(`
         SELECT * FROM shops WHERE is_published=1
-        ORDER BY is_featured DESC, sort_order ASC, created_at DESC
+        ORDER BY is_featured DESC, COALESCE(updated_at,published_at,created_at) DESC, sort_order ASC, id DESC
       `).all();
       return json({ok:true,shops:(r.results||[]).map(publicShopRow)});
     }
@@ -1868,17 +3963,17 @@ ${urls.map(x=>`  <url>
 
     if(url.pathname==="/api/news" && request.method==="GET"){
       const {results}=await env.DB.prepare(`
-        SELECT name, slug, published_at, created_at, is_new
+        SELECT name, slug, published_at, updated_at, created_at, is_new
         FROM shops
         WHERE is_published=1 AND is_new=1 AND COALESCE(listing_status,'published')='published'
-        ORDER BY COALESCE(published_at,created_at) DESC
+        ORDER BY COALESCE(updated_at,published_at,created_at) DESC, id DESC
         LIMIT 8
       `).all();
       return json({ok:true,news:(results||[]).map(s=>({
         type:"shop",
         name:s.name,
         slug:s.slug,
-        date:s.published_at||s.created_at
+        date:s.updated_at||s.published_at||s.created_at
       }))});
     }
 
@@ -2137,6 +4232,52 @@ ${urls.map(x=>`  <url>
 
 
       // ---------- GitHub site update ----------
+
+      if(url.pathname==="/api/admin/deploy-status" && request.method==="GET"){
+        const accountId=String(env.CLOUDFLARE_ACCOUNT_ID||"").trim();
+        const apiToken=String(env.CLOUDFLARE_API_TOKEN||"").trim();
+        const workerName=String(env.CLOUDFLARE_WORKER_NAME||"").trim();
+        let workerTag=String(env.CLOUDFLARE_WORKER_TAG||"").trim();
+        if(!accountId || !apiToken || !workerName){
+          return json({ok:true,configured:false,missing:[!accountId&&"CLOUDFLARE_ACCOUNT_ID",!apiToken&&"CLOUDFLARE_API_TOKEN",!workerName&&"CLOUDFLARE_WORKER_NAME"].filter(Boolean)});
+        }
+        const headers={"Authorization":`Bearer ${apiToken}`,"Accept":"application/json"};
+        try{
+          if(!workerTag){
+            const sr=await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/workers/scripts`,{headers});
+            const sd=await sr.json();
+            if(!sr.ok || !sd?.success)throw new Error(sd?.errors?.[0]?.message||`WORKER_LIST_HTTP_${sr.status}`);
+            const match=(Array.isArray(sd.result)?sd.result:[]).find(x=>String(x?.id||"")===workerName);
+            workerTag=String(match?.tag||"");
+            if(!workerTag)throw new Error("CLOUDFLARE_WORKER_NOT_FOUND");
+          }
+          const br=await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/builds/workers/${encodeURIComponent(workerTag)}/builds`,{headers});
+          const bd=await br.json();
+          if(!br.ok || !bd?.success)throw new Error(bd?.errors?.[0]?.message||`BUILDS_HTTP_${br.status}`);
+          const raw=Array.isArray(bd.result)?bd.result:(Array.isArray(bd.result?.builds)?bd.result.builds:[]);
+          const builds=raw.slice(0,10).map(x=>({
+            build_uuid:x?.build_uuid||x?.id||"",
+            // Cloudflare Builds API: status = queued/initializing/running/stopped,
+            // build_outcome = success/fail/skipped/cancelled/terminated.
+            // stopped の場合は build_outcome を優先して管理画面へ渡す。
+            status:(String(x?.status||"").toLowerCase()==="stopped" && x?.build_outcome)
+              ? x.build_outcome
+              : (x?.status||x?.build_status||x?.build_outcome||"unknown"),
+            raw_status:x?.status||"",
+            build_outcome:x?.build_outcome||"",
+            branch:x?.build_trigger_metadata?.branch||x?.branch||x?.trigger?.branch||"",
+            commit_hash:x?.build_trigger_metadata?.commit_hash||x?.commit_hash||"",
+            message:x?.build_trigger_metadata?.commit_message||x?.commit_message||x?.trigger?.trigger_name||"",
+            trigger:x?.trigger?.trigger_name||x?.build_trigger_source||"",
+            created_at:x?.created_at||x?.created_on||"",
+            updated_at:x?.updated_at||x?.completed_at||x?.stopped_on||x?.modified_on||x?.created_at||x?.created_on||""
+          })).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+          return json({ok:true,configured:true,worker_name:workerName,worker_tag:workerTag,builds});
+        }catch(e){
+          return json({ok:false,configured:true,error:"CLOUDFLARE_BUILDS_FAILED",message:e?.message||"UNKNOWN_ERROR"},502);
+        }
+      }
+
       if(url.pathname==="/api/admin/github/status" && request.method==="GET"){
         const c=kbnGithubConfig(env);
         if(!c.token){
@@ -2176,6 +4317,44 @@ ${urls.map(x=>`  <url>
             error:e.message,
             editable_files:KBN_GITHUB_EDITABLE_FILES
           });
+        }
+      }
+
+      if(url.pathname==="/api/admin/auto-schedule" && request.method==="GET"){
+        try{
+          const {config}=await kbnReadWranglerFromGithub(env);
+          const raw=Array.isArray(config?.triggers?.crons)?config.triggers.crons:[];
+          const times=kbnSortJstTimes(raw.map(kbnCronToJstTime).filter(Boolean));
+          return json({
+            ok:true,
+            timezone:"Asia/Tokyo",
+            times_jst:times,
+            crons:raw
+          });
+        }catch(e){
+          return json({
+            ok:false,
+            error:"AUTO_SCHEDULE_READ_FAILED",
+            message:String(e?.message||e).slice(0,500)
+          },{status:e?.status||502});
+        }
+      }
+
+      if(url.pathname==="/api/admin/auto-schedule" && request.method==="PUT"){
+        let x={};
+        try{x=await request.json()}
+        catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+
+        try{
+          const times=Array.isArray(x.times_jst)?x.times_jst:[];
+          const result=await kbnUpdateAutoSchedule(env,times);
+          return json(result);
+        }catch(e){
+          return json({
+            ok:false,
+            error:"AUTO_SCHEDULE_UPDATE_FAILED",
+            message:String(e?.message||e).slice(0,500)
+          },{status:e?.status||500});
         }
       }
 
@@ -2476,7 +4655,11 @@ ${urls.map(x=>`  <url>
 
         try{
           const result=await refreshIndependentListings(env,{
-            limit:Math.max(1,Math.min(Number(x.limit)||10,30))
+            limit:Math.max(1,Math.min(Number(x.limit)||10,30)),
+            afterId:Math.max(0,Number(x.after_id)||0),
+            revalidate:!!x.revalidate,
+            force:!!x.force,
+            missingOnly:!!x.missing_only
           });
 
           return json(result,{headers:{"Cache-Control":"no-store"}});
@@ -2492,12 +4675,15 @@ ${urls.map(x=>`  <url>
 
       if(url.pathname==="/api/admin/leads/auto-discover" && request.method==="POST"){
         let x={}; try{x=await request.json()}catch{}
-        const max=Math.max(1,Math.min(Number(x.max_listings)||20,40));
-        const pairs=Math.max(1,Math.min(Number(x.pair_limit)||12,48));
-        const perPair=Math.max(1,Math.min(Number(x.per_pair_limit)||3,5));
+        const max=Math.max(1,Math.min(Number(x.max_listings)||10,20));
+        const pairs=Math.max(1,Math.min(Number(x.pair_limit)||15,20));
+        const perPair=Math.max(1,Math.min(Number(x.per_pair_limit)||2,3));
 
         try{
           const result=await autoDiscover(env,request,max,pairs,perPair);
+          if(result?.created?.length){
+            ctx.waitUntil(notifyCreatedShops(env,result.created,"自動開拓").catch(e=>console.error("new shop alert failed",e)));
+          }
           return json(result,{headers:{"Cache-Control":"no-store"}});
         }catch(e){
           console.error("auto-discover failed",e);
@@ -2507,6 +4693,165 @@ ${urls.map(x=>`  <url>
             message:String(e?.message||e||"UNKNOWN_ERROR").slice(0,500)
           },{status:500,headers:{"Cache-Control":"no-store"}});
         }
+      }
+
+
+      if(url.pathname==="/api/admin/leads/refresh-images" && request.method==="POST"){
+        let x={};try{x=await request.json()}catch{}
+        try{
+          const result=await refreshMissingShopImages(env,{limit:Math.max(1,Math.min(Number(x.limit)||20,30)),afterId:Math.max(0,Number(x.after_id)||0)});
+          return json(result,{headers:{"Cache-Control":"no-store"}});
+        }catch(e){
+          return json({ok:false,error:"REFRESH_IMAGES_FAILED",message:String(e?.message||e).slice(0,500)},{status:500});
+        }
+      }
+
+      if(url.pathname==="/api/admin/leads/refresh-missing" && request.method==="POST"){
+        let x={};try{x=await request.json()}catch{}
+        try{
+          const result=await refreshIndependentListings(env,{
+            limit:Math.max(1,Math.min(Number(x.limit)||20,30)),
+            afterId:Math.max(0,Number(x.after_id)||0),
+            revalidate:true,
+            missingOnly:true
+          });
+          return json(result,{headers:{"Cache-Control":"no-store"}});
+        }catch(e){
+          return json({ok:false,error:"REFRESH_MISSING_FAILED",message:String(e?.message||e).slice(0,500)},{status:500});
+        }
+      }
+
+      if(url.pathname==="/api/admin/leads/check-closed" && request.method==="POST"){
+        let x={};try{x=await request.json()}catch{}
+        try{
+          const result=await checkClosedShops(env,{
+            limit:Math.max(1,Math.min(Number(x.limit)||20,50)),
+            afterId:Math.max(0,Number(x.after_id)||0)
+          });
+          return json(result,{headers:{"Cache-Control":"no-store"}});
+        }catch(e){
+          return json({ok:false,error:"CLOSED_CHECK_FAILED",message:String(e?.message||e).slice(0,500)},{status:500});
+        }
+      }
+
+      if(url.pathname==="/api/admin/alerts" && request.method==="GET"){
+        await ensureKbnAlertsTable(env);
+        const r=await env.DB.prepare(`
+          SELECT id,alert_type,title,message,shop_id,is_read,created_at
+          FROM kbn_admin_alerts
+          ORDER BY id DESC LIMIT 50
+        `).all();
+        const unread=(r.results||[]).filter(x=>!Number(x.is_read)).length;
+        return json({ok:true,alerts:r.results||[],unread});
+      }
+
+      const alertReadRoute=url.pathname.match(/^\/api\/admin\/alerts\/(\d+)\/read$/);
+      if(alertReadRoute && request.method==="POST"){
+        await ensureKbnAlertsTable(env);
+        await env.DB.prepare("UPDATE kbn_admin_alerts SET is_read=1 WHERE id=?").bind(Number(alertReadRoute[1])).run();
+        return json({ok:true});
+      }
+
+      const maintenanceActionRoute=url.pathname.match(/^\/api\/admin\/shops\/(\d+)\/maintenance-action$/);
+      if(maintenanceActionRoute && request.method==="POST"){
+        let x={};try{x=await request.json()}catch{}
+        try{
+          const shop=await setShopMaintenanceAction(
+            env,
+            Number(maintenanceActionRoute[1]),
+            String(x.action||"")
+          );
+          if(!shop)return json({ok:false,error:"SHOP_NOT_FOUND"},{status:404});
+
+          await ensureKbnAlertsTable(env);
+          await env.DB.prepare(`
+            UPDATE kbn_admin_alerts SET is_read=1
+            WHERE shop_id=? AND alert_type='closed_shop'
+          `).bind(Number(shop.id)).run();
+
+          const labels={
+            operational:"営業中として継続",
+            temporary_closed:"一時休業として確認",
+            unpublish:"掲載取り消し"
+          };
+          await createKbnAlert(env,{
+            type:"maintenance_action",
+            title:`店舗対応: ${shop.name}`,
+            message:`${labels[String(x.action||"")]||"状態変更"}を実行しました。`,
+            shopId:shop.id
+          });
+
+          return json({ok:true,shop});
+        }catch(e){
+          return json({
+            ok:false,error:"MAINTENANCE_ACTION_FAILED",
+            message:String(e?.message||e).slice(0,500)
+          },{status:400});
+        }
+      }
+
+      if(url.pathname==="/api/admin/leads/refresh-instagram" && request.method==="POST"){
+        let x={};try{x=await request.json()}catch{}
+        const limit=Math.max(1,Math.min(Number(x.limit)||20,40));
+        const afterId=Math.max(0,Number(x.after_id)||0);
+
+        const r=await env.DB.prepare(`
+          SELECT id,name,area,instagram
+          FROM shops
+          WHERE COALESCE(listing_status,'published')='provisional'
+            AND COALESCE(TRIM(instagram),'')=''
+            AND id>?
+          ORDER BY id ASC
+          LIMIT ?
+        `).bind(afterId,limit).all();
+
+        const updated=[],candidates=[],failed=[];
+        for(const shop of (r.results||[])){
+          try{
+            const found=await findGooglePlaceForShop(env,{
+              name:String(shop.name||"").replace(/^【KIN独自掲載】/,"").trim(),
+              area:shop.area||"熊本"
+            });
+            let website="";
+            if(found.ok&&found.matched){
+              const details=await googlePlaceDetails(env,found.place?.id);
+              website=googleWebsite(details.ok?details.place:found.place);
+            }
+
+            const ig=await discoverInstagramForShop(env,{
+              name:String(shop.name||"").replace(/^【KIN独自掲載】/,"").trim(),
+              area:shop.area||"熊本",
+              website,
+              existing:""
+            });
+
+            if(ig?.instagram && Number(ig.score||0)>=90){
+              await env.DB.prepare(`
+                UPDATE shops SET instagram=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
+              `).bind(ig.instagram,shop.id).run();
+              updated.push({id:shop.id,name:shop.name,instagram:ig.instagram,score:ig.score,source:ig.source});
+            }else if(ig?.candidates?.[0] && Number(ig.candidates[0].score||0)>=70){
+              const c=ig.candidates[0];
+              candidates.push({id:shop.id,name:shop.name,handle:c.handle,score:c.score});
+            }
+          }catch(e){
+            failed.push({id:shop.id,name:shop.name,error:String(e?.message||e).slice(0,250)});
+          }
+        }
+
+        const last=(r.results||[]).length?Number(r.results[r.results.length-1].id||0):afterId;
+        const more=await env.DB.prepare(`
+          SELECT id FROM shops
+          WHERE COALESCE(listing_status,'published')='provisional'
+            AND COALESCE(TRIM(instagram),'')=''
+            AND id>?
+          ORDER BY id ASC LIMIT 1
+        `).bind(last).first();
+
+        return json({
+          ok:true,checked:(r.results||[]).length,updated,candidates,failed,
+          next_after_id:last,has_more:!!more
+        },{headers:{"Cache-Control":"no-store"}});
       }
 
 if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
@@ -2521,7 +4866,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
 
       if(url.pathname==="/api/admin/leads/search" && request.method==="GET"){
         const area=t(url.searchParams.get("area")||"熊本",120);
-        const type=t(url.searchParams.get("type")||"bar",50);
+        const type=t(url.searchParams.get("type")||"izakaya",50);
         const start=Math.max(1,Math.min(91,Number(url.searchParams.get("start")||1)));
 
         const result=await searchInstagramLeads(env,{area,type,start});
@@ -2546,7 +4891,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         const name=t(x.name,150);
         const area=t(x.area||"熊本",80);
         const snippet=t(x.snippet,2000);
-        const genre=t(x.genre||"BAR",120);
+        const genre=t(x.genre||"居酒屋",120);
         let instagram=t(x.instagram,500);
 
         if(!name)return json({ok:false,error:"SHOP_NAME_REQUIRED"},{status:400});
@@ -2576,8 +4921,8 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         }
 
         const description=snippet
-          ? `${snippet}\n\n※本ページは、公開されている情報をもとにKUMAMOTO BAR NAVIが独自に掲載しています。掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。`
-          : "※本ページは、公開されている情報をもとにKUMAMOTO BAR NAVIが独自に掲載しています。掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。";
+          ? `${snippet}\n\n※本ページは、公開されている情報をもとにKUMAMOTO IZAKAYA NAVIが独自に掲載しています。掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。`
+          : "※本ページは、公開されている情報をもとにKUMAMOTO IZAKAYA NAVIが独自に掲載しています。掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。";
 
         const slug=slugify(name);
 
@@ -2632,11 +4977,42 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         await env.DB.prepare(`
           UPDATE shops
           SET listing_status='published',
+              published_at=CURRENT_TIMESTAMP,
+              is_new=1,
               updated_at=CURRENT_TIMESTAMP
           WHERE id=?
         `).bind(id).run();
 
         return json({ok:true,shop_id:id,listing_status:"published"});
+      }
+
+      if(url.pathname==="/api/admin/leads/auto-listed" && request.method==="GET"){
+        const r=await env.DB.prepare(`
+          SELECT id,slug,name,area,genre,address,instagram,is_published,listing_status,published_at,updated_at
+          FROM shops
+          WHERE COALESCE(listing_status,'published')='provisional'
+          ORDER BY id DESC
+          LIMIT 300
+        `).all();
+        return json({ok:true,shops:r.results||[]});
+      }
+
+      const autoListedAction=url.pathname.match(/^\/api\/admin\/leads\/auto-listed\/(\d+)\/(unpublish|restore)$/);
+      if(autoListedAction && request.method==="POST"){
+        const id=Number(autoListedAction[1]);
+        const action=autoListedAction[2];
+        const shop=await env.DB.prepare(`
+          SELECT id,name,listing_status,is_published FROM shops WHERE id=? LIMIT 1
+        `).bind(id).first();
+        if(!shop)return json({ok:false,error:"NOT_FOUND"},{status:404});
+        if(normalizeListingStatus(shop.listing_status)!=="provisional"){
+          return json({ok:false,error:"NOT_PROVISIONAL_LISTING"},{status:400});
+        }
+        const published=action==="restore"?1:0;
+        await env.DB.prepare(`
+          UPDATE shops SET is_published=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
+        `).bind(published,id).run();
+        return json({ok:true,shop_id:id,is_published:published,action});
       }
 
       if(url.pathname==="/api/admin/shops" && request.method==="GET"){
@@ -2670,12 +5046,16 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           UPDATE shops SET slug=?,name=?,name_kana=?,area=?,address=?,hours=?,holiday=?,instagram=?,genre=?,features=?,
           description=?,budget_min=?,budget_max=?,seats=?,phone=?,is_recruiting=?,is_published=?,image_url=?,image_key=?,
           is_featured=?,is_new=?,sort_order=?,listing_status=?,
-          published_at=CASE WHEN ?=1 AND published_at IS NULL THEN CURRENT_TIMESTAMP ELSE published_at END,
+          published_at=CASE
+            WHEN ?='provisional' AND ?='published' THEN CURRENT_TIMESTAMP
+            WHEN ?=1 AND published_at IS NULL THEN CURRENT_TIMESTAMP
+            ELSE published_at
+          END,
           updated_at=CURRENT_TIMESTAMP WHERE id=?
         `).bind(
           s.slug,s.name,s.name_kana,s.area,s.address,s.hours,s.holiday,s.instagram,s.genre,s.features,
           s.description,s.budget_min,s.budget_max,s.seats,s.phone,s.is_recruiting,s.is_published,s.image_url,s.image_key,
-          s.is_featured,s.is_new,s.sort_order,s.listing_status,s.is_published,id
+          s.is_featured,s.is_new,s.sort_order,s.listing_status,ex.listing_status,s.listing_status,s.is_published,id
         ).run();
         return json({ok:true});
       }
@@ -3063,5 +5443,12 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
     }
 
     return assetResponse;
+  },
+
+  async scheduled(event, env, ctx){
+    ctx.waitUntil(
+      runScheduledKbnMaintenance(env)
+        .catch(e=>console.error("scheduled KBN maintenance failed",e))
+    );
   }
 };
