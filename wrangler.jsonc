@@ -21,17 +21,18 @@
     "enabled": true
   },
   "vars": {
-    "KIN_VERSION": "1.19",
+    "KIN_VERSION": "1.24",
     "GITHUB_OWNER": "yuuji0628",
     "GITHUB_REPO": "kumamoto-izakaya-navi",
     "GITHUB_BRANCH": "main",
-    "CLOUDFLARE_WORKER_NAME": "kumamoto-izakaya-navi"
+    "CLOUDFLARE_WORKER_NAME": "kumamoto-izakaya-navi",
+    "KIN_SCHEDULE_UPDATED_AT": "2026-08-19T13:57:51.544Z"
   },
   "triggers": {
     "crons": [
-      "10 18 * * *",
-      "10 2 * * *",
-      "10 10 * * *"
+      "0 20 * * *",
+      "0 10 * * *",
+      "0 14 * * *"
     ]
   }
 }
