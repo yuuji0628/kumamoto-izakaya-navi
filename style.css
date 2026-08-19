@@ -571,3 +571,35 @@ div[id]{
 }
 
 /* KUMAMOTO IZAKAYA NAVI ver1.03 admin foundation */
+
+
+/* ===== ver1.23 Public listing status ===== */
+.kin-public-listing-badge{
+  display:inline-flex;align-items:center;min-height:24px;padding:0 9px;margin:0 0 8px;
+  border-radius:999px;font-size:10px;font-weight:900;letter-spacing:.04em
+}
+.kin-public-listing-badge.independent{
+  color:#e4bd59;border:1px solid #755e27;background:rgba(228,189,89,.08)
+}
+.kin-public-listing-badge.formal{
+  color:#87dbaa;border:1px solid #3c7453;background:rgba(91,186,129,.08)
+}
+.list-shop .kin-public-listing-badge{margin-bottom:5px}
+.kin-listing-notice{
+  margin:16px 0;padding:13px 14px;border-radius:14px;background:#09121a
+}
+.kin-listing-notice.independent{border:1px solid #665326;background:rgba(228,189,89,.045)}
+.kin-listing-notice.formal{border:1px solid #365d45;background:rgba(91,186,129,.045)}
+.kin-listing-notice-head{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.kin-listing-notice-head span{
+  display:grid;place-items:center;width:22px;height:22px;border-radius:50%;
+  border:1px solid currentColor;font-size:11px;font-weight:900
+}
+.kin-listing-notice.independent .kin-listing-notice-head{color:#e4bd59}
+.kin-listing-notice.formal .kin-listing-notice-head{color:#87dbaa}
+.kin-listing-notice-head b{font-size:12px}
+.kin-listing-notice p{margin:0;color:#9ba6b0;font-size:11px;line-height:1.7}
+.kin-listing-notice small{display:block;margin-top:7px;color:#798590;font-size:10px;line-height:1.55}
+@media(max-width:640px){
+  .kin-listing-notice{padding:11px 12px;margin:13px 0}
+}

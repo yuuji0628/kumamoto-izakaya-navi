@@ -346,21 +346,10 @@ body{background:var(--bar-bg)}
 .kin-listing-badge.kin-formal{
   color:#86dbab;border:1px solid #3f7455;background:rgba(80,176,120,.08)
 }
-.kin-listing-explain{
-  margin:9px 0;padding:8px 9px;border-radius:9px;border:1px solid #34404c;background:#0a121a
-}
-.kin-listing-explain b{display:block;font-size:.64rem;margin-bottom:3px}
-.kin-listing-explain p{margin:0;color:#8f99a4;font-size:.6rem;line-height:1.45}
-.kin-listing-explain.kin-independent{border-color:#5e4e26;background:rgba(232,186,72,.035)}
-.kin-listing-explain.kin-independent b{color:#e8ba48}
-.kin-listing-explain.kin-formal{border-color:#345843;background:rgba(80,176,120,.035)}
-.kin-listing-explain.kin-formal b{color:#86dbab}
 .shop-card h3{margin:0}
 .shop-card-top{align-items:flex-start}
 @media(max-width:650px){
-  .kin-listing-explain{padding:7px 8px}
-  .kin-listing-explain p{font-size:.58rem}
-}
+  }
 </style>
 
 </head><body>
@@ -370,7 +359,7 @@ body{background:var(--bar-bg)}
 <div class="hero kin-hero-compact">
   <div class="kin-hero-copy">
     <b>熊本居酒屋ナビ 管理</b>
-    <span>KIN ADMIN <strong>ver1.22</strong></span>
+    <span>KIN ADMIN <strong>ver1.23</strong></span>
   </div>
   <small id="status" class="meta">読込中...</small>
 </div>
@@ -622,7 +611,7 @@ function renderAll(sum){
   const leadCount=sum.new_leads??leads.filter(x=>x.status==="new").length;
   const pendingCount=subs.filter(x=>x.status==="pending").length;
 
-  // ver1.22: コンパクト化で削除された旧カウンターを参照しない
+  // ver1.23: コンパクト化で削除された旧カウンターを参照しない
   const setText=(id,value)=>{const el=$(id);if(el)el.textContent=value};
   setText("opsShopCount",shopCount);
   setText("opsSubCount",pendingCount);
@@ -658,9 +647,6 @@ function renderShops(){
     const formal=!provisional;
     const statusLabel=provisional?"KIN独自掲載":"正式掲載";
     const statusClass=provisional?"kin-independent":"kin-formal";
-    const desc=provisional
-      ?"Web上で公開されている情報をもとに、KUMAMOTO IZAKAYA NAVIが独自に掲載している店舗です。店舗様による正式確認前の情報を含む場合があります。"
-      :"店舗様から確認・申込みをいただき、KUMAMOTO IZAKAYA NAVIで正式掲載している店舗です。";
     return `<article class="card shop-card">
       <div class="shop-card-top">
         <div>
@@ -669,11 +655,6 @@ function renderShops(){
           <p class="meta">${esc(s.area||"")} / ${esc(s.genre||"")}</p>
         </div>
         <span class="badge ${Number(s.is_published)?"ok":"off"}">${Number(s.is_published)?"公開":"非公開"}</span>
-      </div>
-
-      <div class="kin-listing-explain ${statusClass}">
-        <b>${statusLabel}とは？</b>
-        <p>${esc(desc)}</p>
       </div>
 
       ${s.description?`<p class="shop-description">${esc(s.description)}</p>`:""}
@@ -717,7 +698,7 @@ if(adminMoreToggle&&adminMorePanel){
     adminMoreToggle.classList.toggle("active",!adminMorePanel.hidden);
   });
 }
-// ver1.22: iPhone/Safariでも確実に反応する委譲型ルーティング
+// ver1.23: iPhone/Safariでも確実に反応する委譲型ルーティング
 document.addEventListener("click",e=>{
   const btn=e.target.closest("[data-tab],[data-fixed-tab],[data-go-tab]");
   if(!btn)return;

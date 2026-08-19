@@ -7,6 +7,28 @@ const DEMO_SHOPS=[
 ];
 
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+
+function kinIsIndependent(s){
+  return String(s?.listing_status||"published").toLowerCase()==="provisional" || Number(s?.is_provisional)===1;
+}
+function kinListingBadge(s){
+  return kinIsIndependent(s)
+    ? '<span class="kin-public-listing-badge independent">KIN独自掲載</span>'
+    : '<span class="kin-public-listing-badge formal">正式掲載</span>';
+}
+function kinListingNotice(s){
+  if(kinIsIndependent(s)){
+    return `<section class="kin-listing-notice independent">
+      <div class="kin-listing-notice-head"><span>i</span><b>KIN独自掲載とは？</b></div>
+      <p>Web上で一般公開されている情報をもとに、KUMAMOTO IZAKAYA NAVIが独自に掲載している店舗です。店舗様による掲載内容の確認前のため、営業時間・料金などが実際と異なる場合があります。</p>
+      <small>掲載内容の修正・掲載取り消しは店舗様からご連絡いただけます。</small>
+    </section>`;
+  }
+  return `<section class="kin-listing-notice formal">
+    <div class="kin-listing-notice-head"><span>✓</span><b>正式掲載店舗</b></div>
+    <p>店舗様から掲載内容の確認・申込みをいただき、KUMAMOTO IZAKAYA NAVIで正式にご案内している店舗です。</p>
+  </section>`;
+}
 async function getShops(){
   try{
     const r=await fetch("/api/shops",{cache:"no-store"});
@@ -20,8 +42,9 @@ async function getShops(){
 function card(s){
   return `<a class="shop-card" href="shop.html?slug=${encodeURIComponent(s.slug||s.id)}">
     <div class="shop-photo">🏮</div><div class="shop-body">
+    ${kinListingBadge(s)}
     <div class="shop-meta">${esc(s.area||"熊本県")} / ${esc(s.genre||"居酒屋")}</div>
-    <h3 class="shop-name">${esc(s.name)}</h3><p class="shop-desc">${esc(s.description||"店舗情報を掲載しています。")}</p>
+    <h3 class="shop-name">${esc(String(s.name||"").replace(/^【KIN独自掲載】/,""))}</h3><p class="shop-desc">${esc(s.description||"店舗情報を掲載しています。")}</p>
     <div class="badges">${(s.features||[]).slice(0,3).map(x=>`<span class="badge">${esc(x)}</span>`).join("")}</div></div></a>`;
 }
 async function home(){
@@ -36,12 +59,15 @@ async function listShops(){
  const form=document.getElementById("shopFilter"); if(form){form.area.value=area;form.genre.value=genre;form.q.value=p.get("q")||""}
  const rows=shops.filter(s=>(!area||s.area===area)&&(!genre||s.genre===genre)&&(!feature||(s.features||[]).includes(feature))&&(!q||JSON.stringify(s).toLowerCase().includes(q)));
  document.getElementById("shopCount").textContent=`${rows.length}件の居酒屋`;
- box.innerHTML=rows.length?rows.map(s=>`<a class="list-shop" href="shop.html?slug=${encodeURIComponent(s.slug||s.id)}"><div class="thumb">🏮</div><div><p>${esc(s.area)} / ${esc(s.genre)}</p><h3>${esc(s.name)}</h3><p>${esc(s.budget||"料金情報準備中")}　${esc(s.hours||"")}</p><div class="badges">${(s.features||[]).slice(0,3).map(x=>`<span class="badge">${esc(x)}</span>`).join("")}</div></div><span class="go">›</span></a>`).join(""):`<div class="empty">条件に合う居酒屋はまだありません。</div>`;
+ box.innerHTML=rows.length?rows.map(s=>`<a class="list-shop" href="shop.html?slug=${encodeURIComponent(s.slug||s.id)}"><div class="thumb">🏮</div><div>${kinListingBadge(s)}<p>${esc(s.area)} / ${esc(s.genre)}</p><h3>${esc(String(s.name||"").replace(/^【KIN独自掲載】/,""))}</h3><p>${esc(s.budget||"料金情報準備中")}　${esc(s.hours||"")}</p><div class="badges">${(s.features||[]).slice(0,3).map(x=>`<span class="badge">${esc(x)}</span>`).join("")}</div></div><span class="go">›</span></a>`).join(""):`<div class="empty">条件に合う居酒屋はまだありません。</div>`;
 }
 async function detail(){
  const box=document.getElementById("shopDetail");if(!box)return;const shops=await getShops();const slug=new URLSearchParams(location.search).get("slug");
  const s=shops.find(x=>String(x.slug||x.id)===String(slug))||shops[0];
- box.innerHTML=`<div class="detail-grid"><div class="detail-photo">🏮</div><div class="detail-card"><p class="kicker">${esc(s.area)} / ${esc(s.genre)}</p><h1>${esc(s.name)}</h1><p style="color:#a3aeb8">${esc(s.description||"")}</p>
+ box.innerHTML=`<div class="detail-grid"><div class="detail-photo">🏮</div><div class="detail-card">
+ ${kinListingBadge(s)}
+ <p class="kicker">${esc(s.area)} / ${esc(s.genre)}</p><h1>${esc(String(s.name||"").replace(/^【KIN独自掲載】/,""))}</h1><p style="color:#a3aeb8">${esc(s.description||"")}</p>
+ ${kinListingNotice(s)}
  <div class="detail-row"><span>エリア</span><b>${esc(s.area||"-")}</b></div><div class="detail-row"><span>ジャンル</span><b>${esc(s.genre||"-")}</b></div>
  <div class="detail-row"><span>営業時間</span><b>${esc(s.hours||"-")}</b></div><div class="detail-row"><span>定休日</span><b>${esc(s.holiday||"-")}</b></div>
  <div class="detail-row"><span>料金目安</span><b>${esc(s.budget||"-")}</b></div>
