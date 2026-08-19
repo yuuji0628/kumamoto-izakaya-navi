@@ -373,7 +373,7 @@ button,[role="button"],.kin-quick-btn{touch-action:manipulation;-webkit-tap-high
 <div class="hero kin-hero-compact">
   <div class="kin-hero-copy">
     <b>熊本居酒屋ナビ 管理</b>
-    <span>KIN ADMIN <strong>ver1.26</strong></span>
+    <span>KIN ADMIN <strong>ver1.27</strong></span>
   </div>
   <small id="status" class="meta">読込中...</small>
 </div>
@@ -627,7 +627,7 @@ function renderAll(sum){
   const leadCount=sum.new_leads??leads.filter(x=>x.status==="new").length;
   const pendingCount=subs.filter(x=>x.status==="pending").length;
 
-  // ver1.26: コンパクト化で削除された旧カウンターを参照しない
+  // ver1.27: コンパクト化で削除された旧カウンターを参照しない
   const setText=(id,value)=>{const el=$(id);if(el)el.textContent=value};
   setText("opsShopCount",shopCount);
   setText("opsSubCount",pendingCount);
@@ -644,7 +644,7 @@ function renderAll(sum){
   if(reqBadge){reqBadge.textContent=pendingCount;reqBadge.hidden=pendingCount===0}
 
   renderShops();
-  renderJobs();
+  renderAll({});
   renderSubs();
   renderRequests();
   renderLeads();
@@ -712,7 +712,7 @@ if(adminMoreToggle&&adminMorePanel){
     adminMoreToggle.classList.toggle("active",!adminMorePanel.hidden);
   });
 }
-// ver1.26: iPhone/Safariでも確実に反応する委譲型ルーティング
+// ver1.27: iPhone/Safariでも確実に反応する委譲型ルーティング
 document.addEventListener("click",e=>{
   const btn=e.target.closest?.("[data-tab],[data-fixed-tab],[data-go-tab]");
   if(!btn)return;
@@ -973,7 +973,8 @@ document.addEventListener("click",async e=>{
       const d=await api("/api/admin/leads/auto-discover",{method:"POST",body:JSON.stringify({max_listings:12,pair_limit:8,per_pair_limit:3})});
       bar.style.width="100%";pct.textContent="100%";txt.textContent="完了";
       st.textContent=`${(d.created||[]).length}店舗を自動掲載 / 重複・除外 ${Number(d.rejected_count||0)}件`;
-      await window.kinLoadAutoListed(); await loadAll();
+      await loadAll();
+      await window.kinLoadAutoListed();
     }catch(err){st.textContent="自動開拓エラー: "+err.message}
     finally{btn.disabled=false}
     return;
@@ -994,7 +995,8 @@ document.addEventListener("click",async e=>{
     const b=e.target.closest(`[data-kin-${key}]`);
     if(b){
       await api(`/api/admin/leads/auto-listed/${b.dataset["kin"+key[0].toUpperCase()+key.slice(1)]}/${key}`,{method:"POST"});
-      await window.kinLoadAutoListed();await loadAll();return;
+      await loadAll();
+      await window.kinLoadAutoListed();return;
     }
   }
 
