@@ -622,7 +622,7 @@
 
 
 <style>
-/* ver1.32 UI refresh */
+/* ver1.33 UI refresh */
 .admin-body{
   background:#080d13;
 }
@@ -1263,7 +1263,7 @@
   }
 }
 
-/* ver1.32 GitHub direct update */
+/* ver1.33 GitHub direct update */
 .kbn-github-status{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
 .kbn-github-dot{width:9px;height:9px;border-radius:50%;background:#7d8792;flex:0 0 auto}
 .kbn-github-dot.ok{background:#61c887;box-shadow:0 0 0 3px rgba(97,200,135,.08)}
@@ -1286,7 +1286,7 @@
   .kbn-github-formrow{grid-template-columns:1fr}
 }
 
-/* ver1.32 backup / diff / restore */
+/* ver1.33 backup / diff / restore */
 .kbn-github-tools{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
 .kbn-github-tools button{border:1px solid #3d4956;border-radius:10px;background:#0a121a;color:#d4dbe1;padding:10px 12px;font-weight:800}
 .kbn-github-tools button:hover{border-color:#b89442;color:#f0c75c}
@@ -1370,114 +1370,28 @@
 </style>
 
 
-<style id="kbn-analytics-readable-v2">
-/* Analytics readability upgrade */
-#tab-analytics{overflow:hidden}
-#tab-analytics .admin-block-head{align-items:center}
-#tab-analytics>p{margin:8px 0 18px!important;line-height:1.7}
-.analytics-summary.analytics-summary-v2{
-  display:grid!important;
-  grid-template-columns:repeat(4,minmax(0,1fr))!important;
-  gap:10px!important;
-  margin:14px 0 18px!important;
-}
-.analytics-summary-v2 .analytics-kpi{
-  position:relative;
-  overflow:hidden;
-  padding:14px 12px!important;
-  border:1px solid #38434f!important;
-  border-radius:14px!important;
-  background:linear-gradient(180deg,#111923,#0c131b)!important;
-  text-align:left!important;
-}
-.analytics-summary-v2 .analytics-kpi::after{
-  content:"";position:absolute;right:-16px;bottom:-24px;width:72px;height:72px;
-  border:1px solid rgba(239,196,90,.16);border-radius:50%;
-}
-.analytics-summary-v2 .analytics-kpi small{display:block;color:#9fa8b4;font-size:.68rem;margin:0 0 4px}
-.analytics-summary-v2 .analytics-kpi strong{display:block;color:#f0c552;font-size:1.55rem;line-height:1.15;letter-spacing:.01em}
-.analytics-summary-v2 .analytics-kpi span{display:block;color:#cbd1d8;font-size:.64rem;margin-top:5px}
-.analytics-toolbar-v2{
-  display:flex;justify-content:space-between;align-items:center;gap:10px;margin:2px 0 10px;
-}
-.analytics-toolbar-v2 h3{margin:0;font-size:1rem}
-.analytics-toolbar-v2 select{
-  min-height:38px;border:1px solid #394450;border-radius:10px;background:#0b1219;color:#e9edf2;padding:0 10px;
-}
-.analytics-list-v2{display:grid;gap:10px!important}
-.analytics-shop-v2{
-  display:grid;grid-template-columns:52px minmax(0,1fr);gap:12px;
-  padding:14px!important;border:1px solid #35414d!important;border-radius:14px!important;
-  background:linear-gradient(180deg,#0f171f,#0a1118)!important;
-}
-.analytics-rank-v2{
-  width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
-  border:1px solid #414c58;background:#111a24;color:#f0c552;font-weight:900;font-size:1rem;
-}
-.analytics-shop-main-v2{min-width:0}
-.analytics-shop-head-v2{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-.analytics-shop-head-v2 h3{margin:0;font-size:1rem;line-height:1.4;overflow-wrap:anywhere}
-.analytics-rate-v2{text-align:right;white-space:nowrap}
-.analytics-rate-v2 b{display:block;color:#f0c552;font-size:1.05rem}
-.analytics-rate-v2 small{color:#8f99a6;font-size:.6rem}
-.analytics-main-numbers-v2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:11px 0 10px}
-.analytics-number-v2{padding:9px 10px;border-radius:10px;background:#111a24;border:1px solid #2f3944}
-.analytics-number-v2 small{display:block;color:#8f99a6;font-size:.62rem}
-.analytics-number-v2 strong{display:block;margin-top:2px;color:#f4f6f8;font-size:1.05rem}
-.analytics-number-v2 strong em{font-style:normal;color:#f0c552}
-.analytics-bar-v2{height:6px;border-radius:999px;background:#1b2530;overflow:hidden;margin:0 0 10px}
-.analytics-bar-v2 i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#ad7d21,#f0c552);min-width:2px}
-.analytics-breakdown-v2{display:flex;flex-wrap:wrap;gap:6px}
-.analytics-chip-v2{padding:5px 8px;border:1px solid #303b47;border-radius:999px;background:#0b1219;color:#b9c1ca;font-size:.62rem}
-.analytics-chip-v2 b{color:#eef1f4;margin-left:3px}
-.analytics-empty-v2{padding:18px;border:1px dashed #394450;border-radius:12px;color:#9fa8b4;text-align:center}
-@media(max-width:640px){
-  .analytics-summary.analytics-summary-v2{grid-template-columns:repeat(2,minmax(0,1fr))!important}
-  .analytics-summary-v2 .analytics-kpi{padding:12px 10px!important}
-  .analytics-summary-v2 .analytics-kpi strong{font-size:1.35rem}
-  .analytics-toolbar-v2{align-items:stretch;flex-direction:column}
-  .analytics-toolbar-v2 select{width:100%}
-  .analytics-shop-v2{grid-template-columns:42px minmax(0,1fr);gap:9px;padding:12px!important}
-  .analytics-rank-v2{width:38px;height:38px;border-radius:10px;font-size:.9rem}
-  .analytics-shop-head-v2{gap:6px}
-  .analytics-rate-v2 b{font-size:.95rem}
-}
-</style>
-
-
-<style id="izakaya-smart-dashboard-fix">
-/* 居酒屋ナビ：スマート管理ダッシュボード */
-@media (max-width:700px){
-  .dashboard-card,.dashboard-panel,.admin-dashboard,.quick-dashboard{
-    padding:14px!important;border-radius:18px!important
-  }
-  .dashboard-card h2,.dashboard-panel h2{font-size:24px!important;margin:4px 0 8px!important}
-  .dashboard-card p,.dashboard-panel p{margin:4px 0!important}
-  .dashboard-actions,.quick-actions,.dashboard-grid{
-    display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;
-    gap:8px!important
-  }
-  .dashboard-actions>*,
-  .quick-actions>*,
-  .dashboard-grid>*{
-    min-height:82px!important;padding:10px 7px!important;border-radius:14px!important
-  }
-  .dashboard-actions h3,.quick-actions h3,.dashboard-grid h3{
-    font-size:13px!important;line-height:1.35!important;margin:4px 0!important
-  }
-  .dashboard-actions p,.quick-actions p,.dashboard-grid p{
-    font-size:10px!important;line-height:1.35!important
-  }
-  .shop-card{padding:14px!important;margin-bottom:10px!important}
+<style id="kin-clean-rebuild">
+@media(max-width:700px){
+  .admin-welcome{display:none!important}
+  .admin-login-bar{margin:8px 0!important;padding:9px 12px!important}
+  .admin-tabs{position:sticky!important;top:0!important;z-index:30!important;margin:8px 0 12px!important;padding:7px!important}
+  .admin-tabs button,.admin-tabs summary{min-height:48px!important;padding:9px 8px!important;font-size:14px!important}
+  .ops-summary,.dashboard-stats{gap:7px!important;margin:8px 0!important}
+  .ops-summary>* ,.dashboard-stats>*{min-height:58px!important;padding:9px 11px!important}
+  .ops-dashboard,.admin-dashboard,.dashboard-card{padding:13px!important;margin:10px 0!important;border-radius:17px!important}
+  .ops-dashboard h2,.admin-dashboard h2,.dashboard-card h2{font-size:22px!important;margin:3px 0 7px!important}
+  .ops-quick-actions,.dashboard-actions,.quick-actions{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:7px!important}
+  .ops-quick-actions>*,.dashboard-actions>*,.quick-actions>*{min-height:76px!important;padding:9px 6px!important;border-radius:13px!important}
+  .shop-card{padding:13px!important;margin:9px 0!important;border-radius:16px!important}
 }
 </style>
 
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.32</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
+<section class="admin-welcome"><div><p class="eyebrow">KIN ADMIN ver1.33</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
 
 <div class="admin-login-bar">
-  <span>🔐 管理者ログイン中 <small id="authStatusText">ver1.32</small></span>
+  <span>🔐 管理者ログイン中 <small id="authStatusText">ver1.33</small></span>
   <button type="button" id="adminLogoutBtn">ログアウト</button>
 </div>
 
@@ -1561,7 +1475,7 @@
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.32：自動開拓エリア判定修正
+    ver1.33：自動開拓エリア判定修正
   </div>
 </section>
 
@@ -1744,7 +1658,7 @@
   <div class="admin-block-head">
     <div>
       <p class="eyebrow">LEAD FINDER</p>
-      <h2>BAR開拓</h2>
+      <h2>居酒屋開拓</h2>
       <p>「自動開拓」「手動検索」「既存店舗更新」の3つに整理しました。</p>
     </div>
   </div>
@@ -1761,7 +1675,7 @@
 </div>
 <div class="lead-search-card">
     <h3>🔎 手動検索</h3>
-    <p>エリアを選ぶと、熊本のBAR系Instagram候補を探す検索を開きます。</p>
+    <p>エリアを選ぶと、熊本の居酒屋系Instagram候補を探す検索を開きます。</p>
 
     <div class="lead-area-grid">
       <button type="button" data-lead-area="熊本市">熊本市</button>
@@ -1822,7 +1736,7 @@
 <option value="苓北町"></option>
       </datalist>
       <select id="leadSearchType">
-<option value="bar">BAR</option>
+<option value="izakaya">居酒屋</option>
 <option value="darts">ダーツバー</option>
 <option value="karaoke">カラオケバー</option>
 <option value="snack">スナック</option>
@@ -2156,7 +2070,7 @@ window.loadKbnGithubStatus=async function(){
   const help=$("kbnGithubSetupHelp");
   try{
     const d=await api("/api/admin/github/status");
-    repo.textContent=`${d.owner||"yuuji0628"}/${d.repo||"kumamoto-bar-navi"} (${d.branch||"main"})`;
+    repo.textContent=`${d.owner||"yuuji0628"}/${d.repo||"kumamoto-izakaya-navi"} (${d.branch||"main"})`;
     const files=d.editable_files||kbnGithubFallbackFiles;
     const githubFilesEl=$("kbnGithubFiles");
     if(githubFilesEl){
@@ -3192,7 +3106,7 @@ function drawAutoBackground(ctx,shop){
   ctx.restore();
 
   // initials
-  const initials=String(shop?.name||"BAR")
+  const initials=String(shop?.name||"居酒屋")
     .replace(/\s+/g,"")
     .slice(0,2)
     .toUpperCase();
@@ -3367,7 +3281,7 @@ async function renderInstaPost(shop){
     ctx.textAlign="center";
     ctx.fillStyle="rgba(217,173,69,.14)";
     ctx.font="900 210px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-    ctx.fillText((shop?.name||"BAR").replace(/\s+/g,"").slice(0,2),px+pw/2,py+280);
+    ctx.fillText((shop?.name||"居酒屋").replace(/\s+/g,"").slice(0,2),px+pw/2,py+280);
 
     ctx.fillStyle=gold2;
     ctx.font="700 30px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
@@ -3382,10 +3296,10 @@ async function renderInstaPost(shop){
 
   ctx.fillStyle=white;
   ctx.font="800 31px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  ctx.fillText("BAR",64,375);
+  ctx.fillText("居酒屋",64,375);
 
   ctx.font="900 64px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  wrapCanvasText(ctx,shop?.name||"BAR",64,450,410,68,2);
+  wrapCanvasText(ctx,shop?.name||"居酒屋",64,450,410,68,2);
 
   // chips
   const chips=[
@@ -3421,7 +3335,7 @@ async function renderInstaPost(shop){
     ["📍","エリア",shop?.area||"熊本"],
     ["◷","営業時間",shop?.hours||"店舗情報をご確認ください"],
     ["▣","定休日",shop?.holiday||"店舗情報をご確認ください"],
-    ["◎","設備・特徴",[shop?.genre,shop?.features].filter(Boolean).join(" / ")||"BAR"]
+    ["◎","設備・特徴",[shop?.genre,shop?.features].filter(Boolean).join(" / ")||"居酒屋"]
   ];
 
   const colW=248;
@@ -3451,7 +3365,7 @@ async function renderInstaPost(shop){
   // footer CTA
   ctx.fillStyle=gold2;
   ctx.font="800 28px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  ctx.fillText("熊本のBAR探しは KUMAMOTO IZAKAYA NAVIで！",60,982);
+  ctx.fillText("熊本の居酒屋探しは KUMAMOTO IZAKAYA NAVIで！",60,982);
 
   drawRoundedRect(ctx,635,950,300,74,30,gold);
   ctx.fillStyle="#111";
@@ -3575,18 +3489,18 @@ function buildInstaCaption(shop){
   if(holiday)detailLines.push(`📅 定休日：${holiday}`);
 
   const hashtags=[
-    "#熊本BAR",
-    "#熊本バー",
+    "#熊本居酒屋",
+    "#熊本居酒屋",
     `#${area.replace(/\s+/g,"")}BAR`,
     "#熊本夜遊び",
     "#熊本グルメ",
-    "#バー巡り",
+    "#居酒屋巡り",
     "#熊本ナイトスポット",
-    "#KUMAMOTOBARNAVI"
+    "#KUMAMOTOIZAKAYANAVI"
   ];
 
   const lines=[
-    "🍸 新規掲載BARのお知らせ🎯",
+    "🍸 新規掲載居酒屋のお知らせ🎯",
     "",
     "熊本県内の居酒屋を探せる",
     "「KUMAMOTO IZAKAYA NAVI」に、",
@@ -4059,57 +3973,19 @@ window.loadAnalytics=async function(){
   const list=$("analyticsList");
   const daily=$("dailyAnalyticsList");
   try{
-    summary.classList.add("analytics-summary-v2");
-    list.classList.add("analytics-list-v2");
     summary.innerHTML="<p>アクセス集計を読み込んでいます...</p>";
     const d=await api("/api/admin/analytics");
     const rows=d.analytics||[];
     const totalViews=rows.reduce((a,x)=>a+Number(x.views||0),0);
-    const totalClicks=rows.reduce((a,x)=>a+Number(x.instagram_clicks||0)+Number(x.map_clicks||0)+Number(x.phone_clicks||0)+Number(x.website_clicks||0),0);
-    const views30=rows.reduce((a,x)=>a+Number(x.views_30d||0),0);
-    const clicks30=rows.reduce((a,x)=>a+Number(x.clicks_30d||0),0);
-    const rate30=views30>0?(clicks30/views30*100):0;
     setDashboardCount("dashViewCount",totalViews);
-    summary.innerHTML=`
-      <div class="analytics-kpi"><small>直近30日の閲覧</small><strong>${views30.toLocaleString()}</strong><span>いまの動きを確認</span></div>
-      <div class="analytics-kpi"><small>直近30日の反応</small><strong>${clicks30.toLocaleString()}</strong><span>クリック・問い合わせ行動</span></div>
-      <div class="analytics-kpi"><small>30日反応率</small><strong>${rate30.toFixed(1)}%</strong><span>反応 ÷ 閲覧</span></div>
-      <div class="analytics-kpi"><small>累計閲覧</small><strong>${totalViews.toLocaleString()}</strong><span>累計反応 ${totalClicks.toLocaleString()}</span></div>`;
-
-    if(!rows.length){
-      list.innerHTML='<div class="analytics-empty-v2">アクセスデータはまだありません。</div>';
-    }else{
-      const sorted=[...rows].sort((a,b)=>Number(b.views_30d||0)-Number(a.views_30d||0)||Number(b.clicks_30d||0)-Number(a.clicks_30d||0));
-      const maxViews30=Math.max(1,...sorted.map(x=>Number(x.views_30d||0)));
-      list.innerHTML=`<div class="analytics-toolbar-v2"><h3>店舗別ランキング <small style="color:#8f99a6;font-weight:500">（30日閲覧順）</small></h3></div>`+
-        sorted.map((x,index)=>{
-          const v30=Number(x.views_30d||0), c30=Number(x.clicks_30d||0);
-          const rate=v30>0?(c30/v30*100):0;
-          const width=Math.max(2,Math.round(v30/maxViews30*100));
-          const insta=Number(x.instagram_clicks||0), map=Number(x.map_clicks||0), phone=Number(x.phone_clicks||0), web=Number(x.website_clicks||0);
-          return `<article class="analytics-shop-v2">
-            <div class="analytics-rank-v2">${index+1}</div>
-            <div class="analytics-shop-main-v2">
-              <div class="analytics-shop-head-v2">
-                <h3>${esc(x.name||"")}</h3>
-                <div class="analytics-rate-v2"><b>${rate.toFixed(1)}%</b><small>30日反応率</small></div>
-              </div>
-              <div class="analytics-main-numbers-v2">
-                <div class="analytics-number-v2"><small>30日 閲覧</small><strong><em>${v30.toLocaleString()}</em> 回</strong></div>
-                <div class="analytics-number-v2"><small>30日 反応</small><strong><em>${c30.toLocaleString()}</em> 件</strong></div>
-              </div>
-              <div class="analytics-bar-v2"><i style="width:${width}%"></i></div>
-              <div class="analytics-breakdown-v2">
-                <span class="analytics-chip-v2">累計閲覧 <b>${Number(x.views||0).toLocaleString()}</b></span>
-                <span class="analytics-chip-v2">Instagram <b>${insta.toLocaleString()}</b></span>
-                <span class="analytics-chip-v2">地図 <b>${map.toLocaleString()}</b></span>
-                <span class="analytics-chip-v2">電話 <b>${phone.toLocaleString()}</b></span>
-                ${web?`<span class="analytics-chip-v2">Web <b>${web.toLocaleString()}</b></span>`:""}
-              </div>
-            </div>
-          </article>`;
-        }).join("");
-    }
+    const totalClicks=rows.reduce((a,x)=>a+Number(x.instagram_clicks||0)+Number(x.map_clicks||0)+Number(x.phone_clicks||0)+Number(x.website_clicks||0),0);
+    summary.innerHTML=`<div><b>総閲覧数</b><strong>${totalViews}</strong></div><div><b>総反応数</b><strong>${totalClicks}</strong></div>`;
+    list.innerHTML=rows.length?rows.map(x=>`
+      <article class="admin-shop-item">
+        <h3>${esc(x.name||"")}</h3>
+        <p>30日：閲覧 ${Number(x.views_30d||0)} / 反応 ${Number(x.clicks_30d||0)}</p>
+        <small>累計閲覧 ${Number(x.views||0)} ・ Instagram ${Number(x.instagram_clicks||0)} ・ 地図 ${Number(x.map_clicks||0)} ・ 電話 ${Number(x.phone_clicks||0)}</small>
+      </article>`).join(""):"<p>アクセスデータはまだありません。</p>";
     await loadDailyAnalytics();
   }catch(e){
     console.error("analytics load failed",e);
@@ -4690,7 +4566,7 @@ window.runAutoDiscovery=async function(){
 
 window.searchLeadsInAdmin=async function({append=false}={}){
   const area=String($("leadSearchArea")?.value||"熊本").trim()||"熊本";
-  const type=$("leadSearchType")?.value||"bar";
+  const type=$("leadSearchType")?.value||"izakaya";
   const status=$("leadSearchStatus");
   const results=$("leadSearchResults");
   const more=$("leadSearchMoreBtn");
@@ -4885,13 +4761,13 @@ window.createProvisionalFromSearch=async function(btn){
   const name=btn.dataset.name||handle||"店舗";
   const area=btn.dataset.area||"熊本";
   const snippet=btn.dataset.snippet||"";
-  const type=$("leadSearchType")?.value||"bar";
+  const type=$("leadSearchType")?.value||"izakaya";
   const genre={
-    bar:"BAR", darts:"ダーツバー", karaoke:"カラオケバー", snack:"スナック",
+    bar:"居酒屋", darts:"ダーツバー", karaoke:"カラオケバー", snack:"スナック",
     lounge:"ラウンジ", girls:"ガールズバー", shot:"ショットバー", sports:"スポーツバー",
     wine:"ワインバー", beer:"ビアバー", cocktail:"カクテルバー", music:"ミュージックバー",
     shisha:"シーシャバー", concept:"コンセプトバー"
-  }[type]||"BAR";
+  }[type]||"居酒屋";
 
   if(!confirm(`「${name}」をKBN独自掲載しますか？\n\n公開情報をもとにKBN独自掲載し、店舗様へ確認・修正・削除案内を送る前提です。`))return;
 
@@ -5037,11 +4913,11 @@ function leadInstagramUrl(value){
 
 window.openLeadSearch=function(area,type="bar"){
   const typeWord={
-    bar:"BAR", darts:"ダーツバー", karaoke:"カラオケバー", snack:"スナック",
+    bar:"居酒屋", darts:"ダーツバー", karaoke:"カラオケバー", snack:"スナック",
     lounge:"ラウンジ", girls:"ガールズバー", shot:"ショットバー", sports:"スポーツバー",
     wine:"ワインバー", beer:"ビアバー", cocktail:"カクテルバー", music:"ミュージックバー",
     shisha:"シーシャバー", concept:"コンセプトバー"
-  }[type]||"BAR";
+  }[type]||"居酒屋";
 
   const q=`site:instagram.com ${area} ${typeWord}`;
   location.href=`https://www.google.com/search?q=${encodeURIComponent(q)}`;
@@ -5119,21 +4995,21 @@ function buildLeadDmText(){
   const name=String($("leadName")?.value||"").trim()||"店舗様";
   const area=String($("leadArea")?.value||"").trim();
   const insta=parseInstagramInput($("leadInstagram")?.value||"");
-  const searchType=$("leadSearchType")?.value||"bar";
+  const searchType=$("leadSearchType")?.value||"izakaya";
 
   const typeLabel={
-    bar:"BAR", darts:"ダーツバー", karaoke:"カラオケバー", snack:"スナック",
+    bar:"居酒屋", darts:"ダーツバー", karaoke:"カラオケバー", snack:"スナック",
     lounge:"ラウンジ", girls:"ガールズバー", shot:"ショットバー", sports:"スポーツバー",
     wine:"ワインバー", beer:"ビアバー", cocktail:"カクテルバー", music:"ミュージックバー",
     shisha:"シーシャバー", concept:"コンセプトバー"
-  }[searchType]||"BAR";
+  }[searchType]||"居酒屋";
 
   const lines=[
     `${name} 様`,
     insta.handle?`@${insta.handle}`:"",
     "",
     "突然のDM失礼いたします。",
-    "熊本県内のBAR・夜のお店を紹介している「KUMAMOTO IZAKAYA NAVI」です🍸",
+    "熊本県内の居酒屋・夜のお店を紹介している「KUMAMOTO IZAKAYA NAVI」です🍸",
     "",
     area
       ? `${area}周辺の${typeLabel}を探している中で、${name}様のInstagramを拝見し、ぜひ掲載をご案内したくご連絡しました。`
