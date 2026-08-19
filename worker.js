@@ -2189,6 +2189,7 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
     provider:"google_details_secondary_official_web"
   };
 }
+// KIN image repair v1.33 - invalid placeholder/image_key recovery
 async function refreshMissingShopImages(env,{limit=20,afterId=0}={}){
   const max=Math.max(1,Math.min(Number(limit)||20,30));
   const cursor=Math.max(0,Number(afterId)||0);
@@ -2197,7 +2198,14 @@ async function refreshMissingShopImages(env,{limit=20,afterId=0}={}){
     FROM shops
     WHERE id>?
       AND COALESCE(is_published,1)=1
-      AND COALESCE(TRIM(image_url),'')=''
+      AND (
+        COALESCE(TRIM(image_url),'')='' OR
+        LOWER(TRIM(COALESCE(image_url,''))) IN ('null','undefined','none','-') OR
+        (
+          TRIM(COALESCE(image_url,'')) LIKE '/api/shop-photo%'
+          AND COALESCE(TRIM(image_key),'') NOT LIKE 'google:%'
+        )
+      )
     ORDER BY id ASC LIMIT ?
   `).bind(cursor,max).all();
   const rows=r.results||[],updated=[],unchanged=[],failed=[];
@@ -2225,8 +2233,21 @@ async function refreshMissingShopImages(env,{limit=20,afterId=0}={}){
     }
   }
   const next=rows.length?Number(rows[rows.length-1].id||0):cursor;
-  const more=await env.DB.prepare(`SELECT id FROM shops WHERE id>? AND COALESCE(is_published,1)=1 AND COALESCE(TRIM(image_url),'')='' ORDER BY id ASC LIMIT 1`).bind(next).first();
-  return {ok:true,checked:rows.length,updated,unchanged,failed,next_after_id:next,has_more:!!more};
+  const more=await env.DB.prepare(`
+    SELECT id FROM shops
+    WHERE id>?
+      AND COALESCE(is_published,1)=1
+      AND (
+        COALESCE(TRIM(image_url),'')='' OR
+        LOWER(TRIM(COALESCE(image_url,''))) IN ('null','undefined','none','-') OR
+        (
+          TRIM(COALESCE(image_url,'')) LIKE '/api/shop-photo%'
+          AND COALESCE(TRIM(image_key),'') NOT LIKE 'google:%'
+        )
+      )
+    ORDER BY id ASC LIMIT 1
+  `).bind(next).first();
+  return {ok:true,checked:rows.length,updated,unchanged,failed,next_after_id:next,has_more:!!more,diagnostic:{matched:updated.length,no_photo:unchanged.filter(x=>x.reason==="GOOGLE_PHOTO_NOT_FOUND").length,no_match:unchanged.filter(x=>String(x.reason||"").includes("MATCH")).length}};
 }
 
 
@@ -4009,9 +4030,16 @@ ${urls.map(x=>`  <url>
       `).all();
 
       const rows=r.results||[];
-      if(rows.some(s=>!String(s.image_url||"").trim())){
+      const needsImageBackfill=rows.some(s=>{
+        const u=String(s.image_url||"").trim();
+        const k=String(s.image_key||"").trim();
+        return !u ||
+          /^(null|undefined|none|-)$/i.test(u) ||
+          (u.startsWith("/api/shop-photo") && !k.startsWith("google:"));
+      });
+      if(needsImageBackfill){
         ctx.waitUntil(
-          backfillMissingShopImages(env,{maxBatches:2,batchSize:20})
+          backfillMissingShopImages(env,{maxBatches:3,batchSize:20})
             .catch(e=>console.error("public image backfill failed",e))
         );
       }
