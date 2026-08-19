@@ -373,7 +373,7 @@ button,[role="button"],.kin-quick-btn{touch-action:manipulation;-webkit-tap-high
 <div class="hero kin-hero-compact">
   <div class="kin-hero-copy">
     <b>熊本居酒屋ナビ 管理</b>
-    <span>KIN ADMIN <strong>ver1.28</strong></span>
+    <span>KIN ADMIN <strong>ver1.29</strong></span>
   </div>
   <small id="status" class="meta">読込中...</small>
 </div>
@@ -620,6 +620,12 @@ async function loadAll(){
   if(statusEl)statusEl.textContent=failed.length?`一部読込エラー (${failed.length})`:"最新";
   if(failed.length)console.warn("KIN partial load errors",failed.map(x=>x.reason));
 }
+function renderJobs(){jobList.innerHTML=jobs.length?jobs.map(j=>`<div class="card"><div class="row"><div><h3>${esc(j.title)}</h3><div class="meta">${esc(j.shop_name||"店舗未指定")} / ${esc(j.employment_type||"")}</div></div><span class="badge ${j.is_published?"pub":"draft"}">${j.is_published?"公開":"非公開"}</span></div><div class="desc">${esc(j.salary||"")}<br>${esc(j.description||"")}</div><div class="actions"><button class="mini" onclick="editJob(${j.id})">編集</button><button class="mini danger" onclick="deleteJob(${j.id})">削除</button></div></div>`).join(""):'<div class="empty">求人はまだありません。</div>'}
+function renderSubs(){submissionList.innerHTML=subs.length?subs.map(s=>subCard(s,s.status==="pending"?`<div class="actions"><button class="mini success" onclick="approveSub(${s.id})">承認</button><button class="mini" onclick="rejectSub(${s.id})">見送り</button></div>`:"")).join(""):'<div class="empty">申込みはありません。</div>'}
+function renderRequests(){const p=subs.filter(s=>s.status==="pending");requestList.innerHTML=p.length?p.map(s=>subCard(s,`<div class="actions"><button class="gold" onclick="approveSub(${s.id})">正式掲載へ切替</button><button class="mini" onclick="prefillFromSub(${s.id})">店舗入力へコピー</button></div>`)).join(""):'<div class="empty">対応待ちの店舗申請はありません。</div>'}
+function renderLeads(){leadList.innerHTML=leads.length?leads.map(l=>`<div class="card"><div class="row"><div><h3>${esc(l.name)}</h3><div class="meta">${esc(l.area||"")} / ${esc(l.genre||"")}</div></div><span class="badge ${l.status==="new"?"new":""}">${esc(l.status)}</span></div><div class="desc">${esc(l.snippet||"")}</div><div class="actions">${l.source_url?`<a class="mini" target="_blank" href="${esc(l.source_url)}">情報元</a>`:""}<button class="mini success" onclick="leadToShop(${l.id})">店舗登録へ</button><button class="mini" onclick="markLead(${l.id},'contacted')">連絡済み</button><button class="mini danger" onclick="deleteLead(${l.id})">削除</button></div></div>`).join(""):'<div class="empty">開拓候補はまだありません。</div>'}
+function renderAccess(s){accessGrid.innerHTML=`<div class="access-card"><b>${s.shops||0}</b><small>登録店舗</small></div><div class="access-card"><b>${s.published||0}</b><small>公開店舗</small></div><div class="access-card"><b>${s.jobs||0}</b><small>公開求人</small></div><div class="access-card"><b>${s.new_leads||0}</b><small>未対応の開拓候補</small></div>`}
+
 function renderAll(sum){
   const shopCount=sum.shops??shops.length;
   const pubCount=sum.published??shops.filter(x=>x.is_published).length;
@@ -627,7 +633,7 @@ function renderAll(sum){
   const leadCount=sum.new_leads??leads.filter(x=>x.status==="new").length;
   const pendingCount=subs.filter(x=>x.status==="pending").length;
 
-  // ver1.28: コンパクト化で削除された旧カウンターを参照しない
+  // ver1.29: コンパクト化で削除された旧カウンターを参照しない
   const setText=(id,value)=>{const el=$(id);if(el)el.textContent=value};
   setText("opsShopCount",shopCount);
   setText("opsSubCount",pendingCount);
@@ -644,13 +650,12 @@ function renderAll(sum){
   if(reqBadge){reqBadge.textContent=pendingCount;reqBadge.hidden=pendingCount===0}
 
   renderShops();
-  
+  renderJobs();
   renderSubs();
   renderRequests();
   renderLeads();
   renderAccess(sum);
-
-  const jobSelect=$("jobShop");
+const jobSelect=$("jobShop");
   if(jobSelect){
     jobSelect.innerHTML='<option value="">店舗未指定</option>'+shops.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");
   }
@@ -712,7 +717,7 @@ if(adminMoreToggle&&adminMorePanel){
     adminMoreToggle.classList.toggle("active",!adminMorePanel.hidden);
   });
 }
-// ver1.28: iPhone/Safariでも確実に反応する委譲型ルーティング
+// ver1.29: iPhone/Safariでも確実に反応する委譲型ルーティング
 document.addEventListener("click",e=>{
   const btn=e.target.closest?.("[data-tab],[data-fixed-tab],[data-go-tab]");
   if(!btn)return;
