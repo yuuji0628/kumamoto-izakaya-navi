@@ -2189,7 +2189,7 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
     provider:"google_details_secondary_official_web"
   };
 }
-// KIN image repair v1.33 - invalid placeholder/image_key recovery
+// KIN image repair v1.34 - scan every provisional shop without a Google photo key
 async function refreshMissingShopImages(env,{limit=20,afterId=0}={}){
   const max=Math.max(1,Math.min(Number(limit)||20,30));
   const cursor=Math.max(0,Number(afterId)||0);
@@ -2197,15 +2197,8 @@ async function refreshMissingShopImages(env,{limit=20,afterId=0}={}){
     SELECT id,name,area,address,image_url,image_key
     FROM shops
     WHERE id>?
-      AND COALESCE(is_published,1)=1
-      AND (
-        COALESCE(TRIM(image_url),'')='' OR
-        LOWER(TRIM(COALESCE(image_url,''))) IN ('null','undefined','none','-') OR
-        (
-          TRIM(COALESCE(image_url,'')) LIKE '/api/shop-photo%'
-          AND COALESCE(TRIM(image_key),'') NOT LIKE 'google:%'
-        )
-      )
+      AND COALESCE(listing_status,'published')='provisional'
+      AND COALESCE(TRIM(image_key),'') NOT LIKE 'google:%'
     ORDER BY id ASC LIMIT ?
   `).bind(cursor,max).all();
   const rows=r.results||[],updated=[],unchanged=[],failed=[];
@@ -2236,18 +2229,11 @@ async function refreshMissingShopImages(env,{limit=20,afterId=0}={}){
   const more=await env.DB.prepare(`
     SELECT id FROM shops
     WHERE id>?
-      AND COALESCE(is_published,1)=1
-      AND (
-        COALESCE(TRIM(image_url),'')='' OR
-        LOWER(TRIM(COALESCE(image_url,''))) IN ('null','undefined','none','-') OR
-        (
-          TRIM(COALESCE(image_url,'')) LIKE '/api/shop-photo%'
-          AND COALESCE(TRIM(image_key),'') NOT LIKE 'google:%'
-        )
-      )
+      AND COALESCE(listing_status,'published')='provisional'
+      AND COALESCE(TRIM(image_key),'') NOT LIKE 'google:%'
     ORDER BY id ASC LIMIT 1
   `).bind(next).first();
-  return {ok:true,checked:rows.length,updated,unchanged,failed,next_after_id:next,has_more:!!more,diagnostic:{matched:updated.length,no_photo:unchanged.filter(x=>x.reason==="GOOGLE_PHOTO_NOT_FOUND").length,no_match:unchanged.filter(x=>String(x.reason||"").includes("MATCH")).length}};
+  return {ok:true,checked:rows.length,updated,unchanged,failed,next_after_id:next,has_more:!!more,diagnostic:{target:"provisional_without_google_photo_key",matched:updated.length,no_photo:unchanged.filter(x=>x.reason==="GOOGLE_PHOTO_NOT_FOUND").length,no_match:unchanged.filter(x=>String(x.reason||"").includes("MATCH")).length}};
 }
 
 
@@ -4031,11 +4017,8 @@ ${urls.map(x=>`  <url>
 
       const rows=r.results||[];
       const needsImageBackfill=rows.some(s=>{
-        const u=String(s.image_url||"").trim();
         const k=String(s.image_key||"").trim();
-        return !u ||
-          /^(null|undefined|none|-)$/i.test(u) ||
-          (u.startsWith("/api/shop-photo") && !k.startsWith("google:"));
+        return String(s.listing_status||"published")==="provisional" && !k.startsWith("google:");
       });
       if(needsImageBackfill){
         ctx.waitUntil(
