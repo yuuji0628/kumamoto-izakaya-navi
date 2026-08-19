@@ -323,7 +323,11 @@ async function ensureKinExtendedSchema(env) {
     ["listing_status","TEXT NOT NULL DEFAULT 'published'"],
     ["published_at","TEXT DEFAULT ''"],
     ["business_status","TEXT DEFAULT 'OPERATIONAL'"],
-    ["website","TEXT DEFAULT ''"]
+    ["website","TEXT DEFAULT ''"],
+    ["image_url","TEXT DEFAULT ''"],
+    ["image_source","TEXT DEFAULT ''"],
+    ["google_photo_name","TEXT DEFAULT ''"],
+    ["image_checked_at","TEXT DEFAULT ''"]
   ];
   for (const [name,type] of additions) {
     if (!cols.has(name)) {
@@ -373,8 +377,10 @@ function kinPublicShop(r){
     else if(min!==null)budget=`${min.toLocaleString("ja-JP")}円〜`;
     else budget=`〜${max.toLocaleString("ja-JP")}円`;
   }
+  const imageUrl=String(r.image_url||"").trim() || (r.google_photo_name?kinInternalImageUrl(r.id,r.google_photo_name):"");
   return {
     ...r,
+    image_url:imageUrl,
     features,
     budget,
     listing_status:provisional?"provisional":"published",
@@ -430,7 +436,7 @@ async function kinGoogleDetails(env,id){
     const mask=[
       "id","displayName","formattedAddress","primaryType","types","businessStatus",
       "nationalPhoneNumber","internationalPhoneNumber","regularOpeningHours",
-      "websiteUri","priceLevel","priceRange","googleMapsUri"
+      "websiteUri","priceLevel","priceRange","googleMapsUri","photos"
     ].join(",");
     const r=await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(id)}`,{
       headers:{
@@ -470,6 +476,15 @@ function kinPrice(p){
   };
   return table[level]||[null,null];
 }
+function kinGooglePhotoName(p){
+  const photos=Array.isArray(p?.photos)?p.photos:[];
+  const photo=photos.find(x=>String(x?.name||"").startsWith("places/"));
+  return clean(photo?.name||"",500);
+}
+function kinInternalImageUrl(id,photoName){
+  return photoName?`/api/shop-image/${Number(id)}`:"";
+}
+
 
 function kinNameNorm(v){
   return String(v||"").normalize("NFKC").toLowerCase()
@@ -499,7 +514,7 @@ function kinInstagramHandle(url){
 async function kinOfficialInstagram(website){
   if(!/^https?:\/\//i.test(String(website||"")))return "";
   try{
-    const r=await fetch(website,{headers:{"User-Agent":"KUMAMOTO-IZAKAYA-NAVI/1.19"}});
+    const r=await fetch(website,{headers:{"User-Agent":"KUMAMOTO-IZAKAYA-NAVI/1.24"}});
     if(!r.ok)return "";
     const html=(await r.text()).slice(0,260000);
     for(const m of html.matchAll(/https?:\/\/(?:www\.)?instagram\.com\/([A-Za-z0-9._]+)/gi)){
@@ -602,17 +617,29 @@ async function kinAutoDiscover(env,{maxListings=12,pairLimit=8,perPairLimit=3}={
         INSERT INTO shops(
           slug,name,area,genre,address,hours,holiday,budget,phone,instagram,features,description,
           is_published,created_at,updated_at,budget_min,budget_max,seats,is_featured,is_new,
-          sort_order,listing_status,published_at,business_status,website
-        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          sort_order,listing_status,published_at,business_status,website,
+          image_url,image_source,google_photo_name,image_checked_at
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       `).bind(
         slug,name,area,kind,address,kinHours(gp),kinHoliday(gp),"",kinPhone(gp),ig.instagram||"",
         JSON.stringify([]),
         `${area}の${kind}として公開情報をもとにKUMAMOTO IZAKAYA NAVIが独自掲載しています。`,
         1,t,t,bmin,bmax,null,0,1,100,"provisional",t,
-        String(gp.businessStatus||"OPERATIONAL"),website
+        String(gp.businessStatus||"OPERATIONAL"),website,
+        "","",kinGooglePhotoName(gp),t
       ).run();
       const id=Number(r.meta?.last_row_id||0);
-      created.push({shop_id:id,id,name,slug,area,genre:kind,instagram:ig.instagram||"",instagram_score:ig.score||0});
+      const googlePhotoName=kinGooglePhotoName(gp);
+      if(googlePhotoName){
+        await env.DB.prepare("UPDATE shops SET image_url=?,image_source='google_places',google_photo_name=?,image_checked_at=? WHERE id=?")
+          .bind(kinInternalImageUrl(id,googlePhotoName),googlePhotoName,t,id).run();
+      }
+      created.push({
+        shop_id:id,id,name,slug,area,genre:kind,
+        instagram:ig.instagram||"",instagram_score:ig.score||0,
+        image_url:googlePhotoName?kinInternalImageUrl(id,googlePhotoName):"",
+        image_source:googlePhotoName?"google_places":""
+      });
       await kinAlert(env,{
         type:"new_shop",
         title:`新店舗を自動掲載: ${name}`,
@@ -633,7 +660,8 @@ async function kinRefreshMissing(env,{limit=20,afterId=0}={}){
       AND (
         COALESCE(TRIM(address),'')='' OR COALESCE(TRIM(hours),'')='' OR
         COALESCE(TRIM(phone),'')='' OR COALESCE(TRIM(instagram),'')='' OR
-        COALESCE(TRIM(genre),'')='' OR budget_min IS NULL OR budget_max IS NULL
+        COALESCE(TRIM(genre),'')='' OR budget_min IS NULL OR budget_max IS NULL OR
+        COALESCE(TRIM(image_url),'')=''
       )
     ORDER BY id ASC LIMIT ?
   `).bind(Number(afterId)||0,Math.max(1,Math.min(Number(limit)||20,40))).all();
@@ -652,17 +680,20 @@ async function kinRefreshMissing(env,{limit=20,afterId=0}={}){
         const ig=await kinInstagramSearch(env,{name:s.name,area:s.area,website});
         if(ig.instagram && ig.score>=90)instagram=ig.instagram;
       }
+      const photoName=kinGooglePhotoName(gp)||s.google_photo_name||"";
+      const imageUrl=photoName?kinInternalImageUrl(s.id,photoName):(s.image_url||"");
       await env.DB.prepare(`
         UPDATE shops SET
           address=?,hours=?,holiday=?,phone=?,instagram=?,budget_min=?,budget_max=?,website=?,
-          business_status=?,updated_at=?
+          business_status=?,image_url=?,image_source=?,google_photo_name=?,image_checked_at=?,updated_at=?
         WHERE id=?
       `).bind(
         clean(gp.formattedAddress||s.address,400),
         kinHours(gp)||s.hours||"",kinHoliday(gp)||s.holiday||"",
         kinPhone(gp)||s.phone||"",instagram,
         bmin??s.budget_min,bmax??s.budget_max,website,
-        String(gp.businessStatus||s.business_status||"OPERATIONAL"),nowIso(),s.id
+        String(gp.businessStatus||s.business_status||"OPERATIONAL"),
+        imageUrl,photoName?"google_places":(s.image_source||""),photoName,nowIso(),nowIso(),s.id
       ).run();
       updated.push({id:s.id,name:s.name,instagram});
     }catch(e){failed.push({id:s.id,name:s.name,error:String(e?.message||e).slice(0,200)})}
@@ -742,7 +773,7 @@ async function kinUpdateSchedule(env,times){
   const sorted=kinSortTimes(good);
   const {config,sha,c}=await kinReadWrangler(env);
   config.triggers={...(config.triggers||{}),crons:sorted.map(kinJstToCron)};
-  config.vars={...(config.vars||{}),KIN_VERSION:"1.19",KIN_SCHEDULE_UPDATED_AT:new Date().toISOString()};
+  config.vars={...(config.vars||{}),KIN_VERSION:"1.24",KIN_SCHEDULE_UPDATED_AT:new Date().toISOString()};
   const result=await githubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
     method:"PUT",headers:{"content-type":"application/json"},
     body:JSON.stringify({
@@ -926,6 +957,43 @@ async function handleApi(request, env, url) {
   }
 
   // ----- Public -----
+
+  const kinImageMatch=url.pathname.match(/^\/api\/shop-image\/(\d+)$/);
+  if(kinImageMatch && request.method==="GET"){
+    const id=Number(kinImageMatch[1]);
+    const row=await env.DB.prepare("SELECT google_photo_name,image_url FROM shops WHERE id=? AND is_published=1").bind(id).first();
+    if(!row)return new Response("Not found",{status:404});
+
+    const photoName=String(row.google_photo_name||"").trim();
+    const external=String(row.image_url||"").trim();
+
+    if(photoName){
+      const key=kinGoogleKey(env);
+      if(!key)return new Response("Image key missing",{status:503});
+      try{
+        const meta=await fetch(`https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=1200&skipHttpRedirect=true`,{
+          headers:{"X-Goog-Api-Key":key}
+        });
+        const d=await meta.json().catch(()=>({}));
+        const photoUri=String(d?.photoUri||"");
+        if(!meta.ok||!photoUri)return new Response("Image unavailable",{status:404});
+
+        const ir=await fetch(photoUri,{headers:{"User-Agent":"KUMAMOTO-IZAKAYA-NAVI/1.24"}});
+        if(!ir.ok)return new Response("Image unavailable",{status:404});
+
+        const h=new Headers(ir.headers);
+        h.set("cache-control","public, max-age=86400, stale-while-revalidate=604800");
+        h.delete("set-cookie");
+        return new Response(ir.body,{status:200,headers:h});
+      }catch{
+        return new Response("Image unavailable",{status:404});
+      }
+    }
+
+    if(/^https?:\/\//i.test(external))return Response.redirect(external,302);
+    return new Response("Image unavailable",{status:404});
+  }
+
   if (url.pathname === "/api/shops" && request.method === "GET") {
     const {results=[]} = await env.DB.prepare(`
       SELECT * FROM shops WHERE is_published=1
@@ -965,7 +1033,7 @@ async function handleApi(request, env, url) {
   }
 
   if (url.pathname === "/api/admin/version" && request.method === "GET") {
-    return json({ok:true,version:"1.19",admin_setup_fix:true,d1_schema_fix:true,bar_parity:true});
+    return json({ok:true,version:"1.24",admin_setup_fix:true,d1_schema_fix:true,bar_parity:true});
   }
 
 
@@ -1431,6 +1499,51 @@ async function handleApi(request, env, url) {
       AND COALESCE(TRIM(instagram),'')='' AND id>? ORDER BY id ASC LIMIT 1
     `).bind(next).first();
     return json({ok:true,checked:rows.length,updated,candidates,failed,next_after_id:next,has_more:!!more});
+  }
+
+
+  if (url.pathname === "/api/admin/leads/refresh-images" && request.method === "POST") {
+    let x={};try{x=await request.json()}catch{}
+    const limit=Math.max(1,Math.min(Number(x.limit)||20,40));
+    const after=Number(x.after_id)||0;
+    const r=await env.DB.prepare(`
+      SELECT * FROM shops
+      WHERE id>? AND (COALESCE(TRIM(image_url),'')='' OR COALESCE(TRIM(google_photo_name),'')='')
+      ORDER BY id ASC LIMIT ?
+    `).bind(after,limit).all();
+
+    const updated=[],failed=[];
+    for(const s of (r.results||[])){
+      try{
+        const f=await kinFindGoogleShop(env,String(s.name||"").replace(/^【KIN独自掲載】/,""),s.area);
+        if(!f.matched)continue;
+        const d=await kinGoogleDetails(env,f.place.id);
+        const gp=d.ok?d.place:f.place;
+        const photoName=kinGooglePhotoName(gp);
+        if(!photoName)continue;
+
+        const imageUrl=kinInternalImageUrl(s.id,photoName);
+        await env.DB.prepare(`
+          UPDATE shops
+          SET image_url=?,image_source='google_places',google_photo_name=?,image_checked_at=?,updated_at=?
+          WHERE id=?
+        `).bind(imageUrl,photoName,nowIso(),nowIso(),s.id).run();
+
+        updated.push({id:s.id,name:s.name,image_url:imageUrl});
+      }catch(e){
+        failed.push({id:s.id,name:s.name,error:String(e?.message||e).slice(0,180)});
+      }
+    }
+
+    const rows=r.results||[];
+    const next=rows.length?Number(rows[rows.length-1].id):after;
+    const more=await env.DB.prepare(`
+      SELECT id FROM shops
+      WHERE id>? AND (COALESCE(TRIM(image_url),'')='' OR COALESCE(TRIM(google_photo_name),'')='')
+      ORDER BY id ASC LIMIT 1
+    `).bind(next).first();
+
+    return json({ok:true,checked:rows.length,updated,failed,next_after_id:next,has_more:!!more});
   }
 
   if (url.pathname === "/api/admin/leads/check-closed" && request.method === "POST") {

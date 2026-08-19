@@ -41,7 +41,7 @@ async function getShops(){
 }
 function card(s){
   return `<a class="shop-card" href="shop.html?slug=${encodeURIComponent(s.slug||s.id)}">
-    <div class="shop-photo">🏮</div><div class="shop-body">
+    <div class="shop-photo">${s.image_url?`<img src="${esc(s.image_url)}" alt="${esc(s.name||"店舗")}の店舗画像" loading="lazy" onerror="this.remove();this.parentElement.classList.add('no-image')">`:"🏮"}</div><div class="shop-body">
     ${kinListingBadge(s)}
     <div class="shop-meta">${esc(s.area||"熊本県")} / ${esc(s.genre||"居酒屋")}</div>
     <h3 class="shop-name">${esc(String(s.name||"").replace(/^【KIN独自掲載】/,""))}</h3><p class="shop-desc">${esc(s.description||"店舗情報を掲載しています。")}</p>
@@ -59,12 +59,12 @@ async function listShops(){
  const form=document.getElementById("shopFilter"); if(form){form.area.value=area;form.genre.value=genre;form.q.value=p.get("q")||""}
  const rows=shops.filter(s=>(!area||s.area===area)&&(!genre||s.genre===genre)&&(!feature||(s.features||[]).includes(feature))&&(!q||JSON.stringify(s).toLowerCase().includes(q)));
  document.getElementById("shopCount").textContent=`${rows.length}件の居酒屋`;
- box.innerHTML=rows.length?rows.map(s=>`<a class="list-shop" href="shop.html?slug=${encodeURIComponent(s.slug||s.id)}"><div class="thumb">🏮</div><div>${kinListingBadge(s)}<p>${esc(s.area)} / ${esc(s.genre)}</p><h3>${esc(String(s.name||"").replace(/^【KIN独自掲載】/,""))}</h3><p>${esc(s.budget||"料金情報準備中")}　${esc(s.hours||"")}</p><div class="badges">${(s.features||[]).slice(0,3).map(x=>`<span class="badge">${esc(x)}</span>`).join("")}</div></div><span class="go">›</span></a>`).join(""):`<div class="empty">条件に合う居酒屋はまだありません。</div>`;
+ box.innerHTML=rows.length?rows.map(s=>`<a class="list-shop" href="shop.html?slug=${encodeURIComponent(s.slug||s.id)}"><div class="thumb">${s.image_url?`<img src="${esc(s.image_url)}" alt="${esc(s.name||"店舗")}の店舗画像" loading="lazy" onerror="this.remove();this.parentElement.classList.add('no-image')">`:"🏮"}</div><div>${kinListingBadge(s)}<p>${esc(s.area)} / ${esc(s.genre)}</p><h3>${esc(String(s.name||"").replace(/^【KIN独自掲載】/,""))}</h3><p>${esc(s.budget||"料金情報準備中")}　${esc(s.hours||"")}</p><div class="badges">${(s.features||[]).slice(0,3).map(x=>`<span class="badge">${esc(x)}</span>`).join("")}</div></div><span class="go">›</span></a>`).join(""):`<div class="empty">条件に合う居酒屋はまだありません。</div>`;
 }
 async function detail(){
  const box=document.getElementById("shopDetail");if(!box)return;const shops=await getShops();const slug=new URLSearchParams(location.search).get("slug");
  const s=shops.find(x=>String(x.slug||x.id)===String(slug))||shops[0];
- box.innerHTML=`<div class="detail-grid"><div class="detail-photo">🏮</div><div class="detail-card">
+ box.innerHTML=`<div class="detail-grid"><div class="detail-photo">${s.image_url?`<img src="${esc(s.image_url)}" alt="${esc(s.name||"店舗")}の店舗画像" onerror="this.remove();this.parentElement.classList.add('no-image')">`:"🏮"}</div><div class="detail-card">
  ${kinListingBadge(s)}
  <p class="kicker">${esc(s.area)} / ${esc(s.genre)}</p><h1>${esc(String(s.name||"").replace(/^【KIN独自掲載】/,""))}</h1><p style="color:#a3aeb8">${esc(s.description||"")}</p>
  ${kinListingNotice(s)}

@@ -603,3 +603,24 @@ div[id]{
 @media(max-width:640px){
   .kin-listing-notice{padding:11px 12px;margin:13px 0}
 }
+
+
+/* ===== ver1.24 Automatic shop images ===== */
+.shop-photo,.list-shop .thumb,.detail-photo{overflow:hidden}
+.shop-photo img,.list-shop .thumb img,.detail-photo img{
+  width:100%;height:100%;display:block;object-fit:cover
+}
+.shop-photo.no-image,.list-shop .thumb.no-image,.detail-photo.no-image{
+  display:flex;align-items:center;justify-content:center
+}
+.list-shop .thumb{
+  min-height:100px;background:linear-gradient(135deg,#171f27,#36201c);
+  display:flex;align-items:center;justify-content:center;color:#c69b48;font-size:28px
+}
+.detail-photo{
+  min-height:360px;background:linear-gradient(135deg,#171f27,#36201c);
+  display:flex;align-items:center;justify-content:center;color:#c69b48;font-size:56px
+}
+@media(max-width:720px){
+  .detail-photo{min-height:250px}
+}
