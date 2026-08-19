@@ -212,6 +212,52 @@ body{background:var(--bar-bg)}
 #adminMoreToggle.active{background:#e6bd55;color:#111}
 @media(max-width:640px){.admin-more-menu-panel-fixed{grid-template-columns:1fr}}
 </style>
+
+<style id="kin-bar-parity-v119">
+.kin-auto-wrap{display:grid;gap:10px}
+.kin-section-title{display:flex;gap:8px;align-items:center;margin:8px 2px 0}
+.kin-section-title>span{color:#e8ba48;font-weight:900;font-size:.7rem}
+.kin-section-title b{display:block;font-size:.9rem}
+.kin-section-title small{display:block;color:#7f8a95;font-size:.65rem;margin-top:1px}
+.kin-auto-card{border:1px solid #34404c;border-radius:14px;background:#0b131b;padding:12px}
+.kin-auto-card.primary{border-color:#6d5723;background:linear-gradient(180deg,rgba(232,186,72,.06),#0b131b)}
+.kin-auto-head{display:grid;grid-template-columns:1fr auto;gap:9px;align-items:center}
+.kin-auto-head b{display:block}.kin-auto-head small{display:block;color:#8f99a4;font-size:.66rem;line-height:1.45;margin-top:3px}
+.kin-auto-head button,.kin-maint-buttons button,.kin-schedule button,.kin-list-head button{
+  min-height:38px;border:1px solid #46515d;border-radius:9px;background:#111922;color:#fff;font-weight:850;font-size:.7rem;padding:0 10px
+}
+.kin-auto-head button{border-color:#8a6b27;background:#e2b645;color:#111}
+.kin-progress{margin-top:9px;padding:9px;border:1px solid #394553;border-radius:10px;background:#081019}
+.kin-progress>div{display:flex;justify-content:space-between;font-size:.68rem}
+.kin-progress i{display:block;height:7px;margin-top:7px;border-radius:99px;background:#17212b;overflow:hidden}
+.kin-progress em{display:block;width:0;height:100%;background:#e8ba48;transition:width .2s}
+.kin-status{margin-top:7px;color:#9aa5af;font-size:.66rem;line-height:1.5}
+.kin-auto-listed{margin-top:11px;border-top:1px solid #27323d;padding-top:9px}
+.kin-list-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.kin-list-head b{font-size:.78rem}.kin-list-head button{min-height:31px}
+.kin-auto-list,.kin-alerts{display:grid;gap:6px;margin-top:7px}
+.kin-shop-row,.kin-alert-row{padding:8px;border:1px solid #303b47;border-radius:10px;background:#081018}
+.kin-shop-row h4,.kin-alert-row b{margin:0;font-size:.75rem}
+.kin-shop-row small,.kin-alert-row small,.kin-alert-row p{display:block;color:#89949f;font-size:.61rem;line-height:1.45;margin:2px 0}
+.kin-shop-actions,.kin-alert-actions{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.kin-shop-actions button,.kin-alert-actions button{
+  min-height:30px;padding:0 8px;border:1px solid #46515d;border-radius:8px;background:#111922;color:#fff;font-weight:800;font-size:.61rem
+}
+.kin-shop-actions .dm{color:#e8ba48;border-color:#755e25}.kin-shop-actions .danger,.kin-alert-actions .danger{color:#ff9a9a;border-color:#7b3636}
+.kin-maint-buttons{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.kin-schedule{margin-top:9px;padding:9px;border:1px solid #5c4a20;border-radius:10px;background:rgba(232,186,72,.04)}
+.kin-schedule-title{display:flex;justify-content:space-between;gap:8px}.kin-schedule-title b{font-size:.72rem;color:#e8ba48}.kin-schedule-title span{font-size:.6rem;color:#818c97}
+.kin-time-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:7px 0}
+.kin-time-row input{width:100%;min-width:0;height:39px;background:#07101a;color:#fff;border:1px solid #3a4652;border-radius:8px;padding:0 6px;color-scheme:dark}
+.kin-schedule>button{width:100%;background:#e2b645;color:#111;border-color:#8a6b27}
+.kin-schedule>small{display:block;color:#89949f;font-size:.61rem;margin-top:6px}
+@media(max-width:650px){
+  .kin-auto-head{grid-template-columns:1fr}.kin-auto-head button{width:100%}
+  .kin-maint-buttons{grid-template-columns:1fr 1fr}.kin-maint-buttons button:last-child{grid-column:1/-1}
+  .kin-time-row{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+</style>
+
 </head><body>
 <header class="top"><div class="topin"><div class="brand"><img src="logo-emblem.jpg"><div><b>熊本居酒屋ナビ 管理</b><small>KUMAMOTO IZAKAYA NAVI</small></div></div><div class="top-actions"><a class="ghost" href="/" target="_blank">サイト</a><button id="logout" class="ghost">ログアウト</button></div></div></header>
 <main class="wrap">
@@ -220,7 +266,7 @@ body{background:var(--bar-bg)}
   <div>
     <h1>管理画面</h1>
     <p>BAR NAVIと同じ配置・操作感で、居酒屋ナビを管理できます。</p>
-    <span class="kin-version-badge">KUMAMOTO IZAKAYA NAVI <b>ver1.18</b></span>
+    <span class="kin-version-badge">KUMAMOTO IZAKAYA NAVI <b>ver1.19</b></span>
   </div>
   <small id="status" class="meta">読込中...</small>
 </div>
@@ -332,6 +378,52 @@ body{background:var(--bar-bg)}
 <section id="panel-requests" class="panel"><div class="notice">店舗申請は、店舗様から届いた掲載申込みを「正式掲載へ切替・承認」するための確認画面です。</div><div id="requestList"></div></section>
 
 <section id="panel-leads" class="panel">
+<div class="kin-auto-wrap">
+  <div class="kin-section-title"><span>01</span><div><b>自動開拓</b><small>Google Placesで熊本県内の居酒屋を自動検索・KIN独自掲載</small></div></div>
+  <div class="kin-auto-card primary">
+    <div class="kin-auto-head">
+      <div><b>⚡ 高精度自動掲載</b><small>店名・住所・電話・営業時間・料金目安・Instagramを可能な範囲で取得します。</small></div>
+      <button type="button" id="kinAutoDiscoverBtn">自動開拓を開始</button>
+    </div>
+    <div id="kinAutoProgress" class="kin-progress" hidden>
+      <div><b id="kinAutoProgressText">開始中...</b><span id="kinAutoProgressPct">0%</span></div>
+      <i><em id="kinAutoProgressBar"></em></i>
+    </div>
+    <div id="kinAutoStatus" class="kin-status"></div>
+
+    <div class="kin-auto-listed">
+      <div class="kin-list-head"><b>自動掲載した店舗</b><button type="button" id="kinReloadAutoListed">更新</button></div>
+      <div id="kinAutoListedSummary" class="kin-status">読み込み中...</div>
+      <div id="kinAutoListedList" class="kin-auto-list"></div>
+    </div>
+  </div>
+
+  <div class="kin-section-title"><span>02</span><div><b>自動メンテナンス</b><small>情報不足・Instagram・閉業確認・予約実行をまとめて管理</small></div></div>
+  <div class="kin-auto-card">
+    <div class="kin-maint-buttons">
+      <button type="button" id="kinRefreshMissingBtn">情報不足を補完</button>
+      <button type="button" id="kinRefreshInstagramBtn">Instagram補完</button>
+      <button type="button" id="kinCheckClosedBtn">閉業チェック</button>
+    </div>
+
+    <div class="kin-schedule">
+      <div class="kin-schedule-title"><b>予約自動開拓</b><span>日本時間（JST）</span></div>
+      <div class="kin-time-row">
+        <input id="kinSchedule1" type="time" value="03:10">
+        <input id="kinSchedule2" type="time" value="11:10">
+        <input id="kinSchedule3" type="time" value="19:10">
+      </div>
+      <button type="button" id="kinScheduleSave">予約を更新</button>
+      <small id="kinScheduleStatus">現在の予約時間を読み込み中...</small>
+    </div>
+
+    <div id="kinMaintenanceStatus" class="kin-status"></div>
+    <div class="kin-list-head"><b>新店舗・運営通知</b><button type="button" id="kinReloadAlerts">更新</button></div>
+    <div id="kinAlerts" class="kin-alerts"></div>
+  </div>
+</div>
+<div class="kin-legacy-leads" hidden>
+
 <div class="notice">開拓候補を探して管理できます。SerpApiキーが設定済みなら自動検索、未設定でも手動登録できます。</div>
 <div class="searchbar"><input id="leadArea" value="熊本市" placeholder="エリア"><input id="leadKeyword" value="居酒屋" placeholder="キーワード"><button class="gold" id="leadSearch">候補を探す</button></div>
 <div class="formcard"><div class="section-head"><h2>候補を手動追加</h2></div><div class="formgrid">
@@ -341,6 +433,7 @@ body{background:var(--bar-bg)}
 
 
 
+</div>
 <section id="panel-sitesettings" class="panel">
 <div class="notice">コードを触らずに公開トップページの主要文言を変更できます。保存内容はD1へ保存されます。</div>
 <div class="formcard">
@@ -622,4 +715,197 @@ ghUploadStart.onclick=async()=>{
   }
 };
 
-</script></body></html>
+</script>
+<script id="kin-bar-parity-v119-js">
+function kinIgHandle(v){
+  const s=String(v||"").trim();
+  const m=s.match(/instagram\.com\/([A-Za-z0-9._]+)/i);
+  return m?m[1]:s.replace(/^@/,"");
+}
+function kinOwnerDm(shop){
+  const name=String(shop?.name||"店舗").replace(/^【KIN独自掲載】/,"");
+  const slug=shop?.slug?`${location.origin}/shop.html?slug=${encodeURIComponent(shop.slug)}`:location.origin;
+  return `${name} 様
+
+突然のDM失礼いたします。
+熊本県内の居酒屋情報を紹介している「KUMAMOTO IZAKAYA NAVI」です🏮
+
+このたび、Web上で公開されている店舗情報を参考に、
+${name} 様を「KIN独自掲載」として当サイトでご紹介させていただきました。
+
+▼掲載ページ
+${slug}
+
+掲載内容に相違・変更がある場合や、修正・掲載取り消しをご希望の場合は、このDMへご返信ください。
+
+また、もし掲載内容に問題がございませんでしたら、
+ぜひ「KIN正式掲載店舗」としてご掲載させていただけないでしょうか。
+
+正式掲載では、店舗様に内容をご確認いただいたうえで、
+営業時間・料金・サービス内容などを、より正確な情報としてご案内できます。
+
+ご迷惑でなければ、こちらから正式掲載への切り替えをご案内させていただければと思っております。
+ご検討いただけましたら、このDMへ一言ご返信いただけますと幸いです。
+
+KUMAMOTO IZAKAYA NAVI
+${location.origin}`;
+}
+
+window.kinLoadAutoListed=async function(){
+  const list=document.getElementById("kinAutoListedList"),sum=document.getElementById("kinAutoListedSummary");
+  if(!list)return;
+  try{
+    const d=await api("/api/admin/leads/auto-listed");
+    const rows=d.shops||[];
+    if(sum)sum.textContent=`KIN独自掲載 ${rows.length}店舗`;
+    list.innerHTML=rows.length?rows.map(s=>{
+      const ig=kinIgHandle(s.instagram||"");
+      return `<div class="kin-shop-row">
+        <h4>${esc(s.name||"")}</h4>
+        <small>${esc(s.area||"")} / ${esc(s.genre||"")} ${Number(s.is_published)?"":"・非公開"}</small>
+        <div class="kin-shop-actions">
+          <button onclick="window.open('/shop.html?slug=${encodeURIComponent(s.slug||"")}','_blank','noopener')">詳細</button>
+          ${ig?`<button class="dm" data-kin-dm="${s.id}">DM作成</button><button class="dm" onclick="window.open('https://ig.me/m/${encodeURIComponent(ig)}','_blank','noopener')">DMへ</button>`:""}
+          ${Number(s.is_published)?`<button class="danger" data-kin-unpublish="${s.id}">掲載取消</button>`:`<button data-kin-restore="${s.id}">再掲載</button>`}
+        </div>
+      </div>`;
+    }).join(""):`<div class="empty">自動掲載店舗はまだありません。</div>`;
+  }catch(e){if(sum)sum.textContent="一覧取得エラー: "+e.message}
+};
+
+window.kinLoadAlerts=async function(){
+  const box=document.getElementById("kinAlerts");if(!box)return;
+  try{
+    const d=await api("/api/admin/alerts");
+    const rows=(d.alerts||[]).filter(x=>!(x.alert_type==="closed_shop"&&Number(x.is_read)));
+    box.innerHTML=rows.length?rows.slice(0,15).map(x=>`<div class="kin-alert-row">
+      <b>${esc(x.title||"お知らせ")}</b><p>${esc(x.message||"")}</p><small>${esc(x.created_at||"")}</small>
+      ${x.alert_type==="closed_shop"&&x.shop_id?`<div class="kin-alert-actions">
+        <button onclick="window.open('/shop.html?slug='+encodeURIComponent((shops.find(s=>Number(s.id)===Number(${x.shop_id}))||{}).slug||''),'_blank','noopener')">詳細確認</button>
+        <button data-kin-maint="operational" data-shop="${x.shop_id}">営業中</button>
+        <button data-kin-maint="temporary_closed" data-shop="${x.shop_id}">一時休業</button>
+        <button class="danger" data-kin-maint="unpublish" data-shop="${x.shop_id}">掲載取消</button>
+      </div>`:""}
+    </div>`).join(""):`<div class="empty">新しい通知はありません。</div>`;
+  }catch(e){box.innerHTML=`<div class="empty">通知取得エラー: ${esc(e.message)}</div>`}
+};
+
+window.kinLoadSchedule=async function(){
+  const st=document.getElementById("kinScheduleStatus");
+  try{
+    const d=await api("/api/admin/auto-schedule");
+    if((d.times_jst||[]).length===3){
+      d.times_jst.forEach((v,i)=>document.getElementById("kinSchedule"+(i+1)).value=v);
+      st.textContent=`現在：${d.times_jst.join(" / ")}（日本時間）`;
+    }else st.textContent="予約時間が3件設定されていません。";
+  }catch(e){st.textContent="予約取得エラー: "+e.message}
+};
+
+document.addEventListener("click",async e=>{
+  if(e.target?.id==="kinAutoDiscoverBtn"){
+    const btn=e.target,box=document.getElementById("kinAutoProgress"),bar=document.getElementById("kinAutoProgressBar"),
+      pct=document.getElementById("kinAutoProgressPct"),txt=document.getElementById("kinAutoProgressText"),st=document.getElementById("kinAutoStatus");
+    if(!confirm("熊本県内の居酒屋を自動検索してKIN独自掲載します。開始しますか？"))return;
+    btn.disabled=true;box.hidden=false;bar.style.width="8%";pct.textContent="8%";txt.textContent="Google Placesを検索中...";
+    try{
+      const d=await api("/api/admin/leads/auto-discover",{method:"POST",body:JSON.stringify({max_listings:12,pair_limit:8,per_pair_limit:3})});
+      bar.style.width="100%";pct.textContent="100%";txt.textContent="完了";
+      st.textContent=`${(d.created||[]).length}店舗を自動掲載 / 重複・除外 ${Number(d.rejected_count||0)}件`;
+      await window.kinLoadAutoListed(); await loadAll();
+    }catch(err){st.textContent="自動開拓エラー: "+err.message}
+    finally{btn.disabled=false}
+    return;
+  }
+  if(e.target?.id==="kinReloadAutoListed"){await window.kinLoadAutoListed();return}
+  if(e.target?.id==="kinReloadAlerts"){await window.kinLoadAlerts();return}
+
+  const dm=e.target.closest("[data-kin-dm]");
+  if(dm){
+    const d=await api("/api/admin/leads/auto-listed"),s=(d.shops||[]).find(x=>Number(x.id)===Number(dm.dataset.kinDm));
+    if(!s)return;
+    const text=kinOwnerDm(s);
+    try{await navigator.clipboard.writeText(text);toast("DM文をコピーしました")}catch{prompt("DM文をコピーしてください",text)}
+    return;
+  }
+
+  for(const key of ["unpublish","restore"]){
+    const b=e.target.closest(`[data-kin-${key}]`);
+    if(b){
+      await api(`/api/admin/leads/auto-listed/${b.dataset["kin"+key[0].toUpperCase()+key.slice(1)]}/${key}`,{method:"POST"});
+      await window.kinLoadAutoListed();await loadAll();return;
+    }
+  }
+
+  const maint=e.target.closest("[data-kin-maint]");
+  if(maint){
+    await api(`/api/admin/shops/${maint.dataset.shop}/maintenance-action`,{
+      method:"POST",body:JSON.stringify({action:maint.dataset.kinMaint})
+    });
+    await window.kinLoadAlerts();await loadAll();return;
+  }
+
+  if(e.target?.id==="kinRefreshMissingBtn"){
+    const st=document.getElementById("kinMaintenanceStatus");e.target.disabled=true;
+    try{
+      let after=0,checked=0,updated=0;
+      for(let i=0;i<30;i++){
+        const d=await api("/api/admin/leads/refresh-missing",{method:"POST",body:JSON.stringify({limit:20,after_id:after})});
+        checked+=Number(d.checked||0);updated+=(d.updated||[]).length;after=Number(d.next_after_id||after);
+        st.textContent=`情報不足を確認中… ${checked}店舗 / ${updated}店舗補完`;
+        if(!d.has_more)break;
+      }
+      st.textContent=`情報不足補完完了：${checked}店舗確認 / ${updated}店舗更新`;
+      await window.kinLoadAutoListed();
+    }catch(err){st.textContent=err.message}finally{e.target.disabled=false}
+    return;
+  }
+
+  if(e.target?.id==="kinRefreshInstagramBtn"){
+    const st=document.getElementById("kinMaintenanceStatus");e.target.disabled=true;
+    try{
+      let after=0,checked=0,updated=0,candidates=0;
+      for(let i=0;i<30;i++){
+        const d=await api("/api/admin/leads/refresh-instagram",{method:"POST",body:JSON.stringify({limit:20,after_id:after})});
+        checked+=Number(d.checked||0);updated+=(d.updated||[]).length;candidates+=(d.candidates||[]).length;after=Number(d.next_after_id||after);
+        st.textContent=`Instagram確認中… ${checked}店舗 / 自動保存 ${updated} / 要確認 ${candidates}`;
+        if(!d.has_more)break;
+      }
+      st.textContent=`Instagram補完完了：${updated}店舗を自動保存 / ${candidates}件は要確認`;
+      await window.kinLoadAutoListed();
+    }catch(err){st.textContent=err.message}finally{e.target.disabled=false}
+    return;
+  }
+
+  if(e.target?.id==="kinCheckClosedBtn"){
+    const st=document.getElementById("kinMaintenanceStatus");e.target.disabled=true;
+    try{
+      let after=0,checked=0,closed=0;
+      for(let i=0;i<30;i++){
+        const d=await api("/api/admin/leads/check-closed",{method:"POST",body:JSON.stringify({limit:20,after_id:after})});
+        checked+=Number(d.checked||0);closed+=(d.closed||[]).length;after=Number(d.next_after_id||after);
+        st.textContent=`閉業確認中… ${checked}店舗 / ${closed}件検出`;
+        if(!d.has_more)break;
+      }
+      st.textContent=`閉業チェック完了：${checked}店舗 / ${closed}件`;
+      await window.kinLoadAlerts();
+    }catch(err){st.textContent=err.message}finally{e.target.disabled=false}
+    return;
+  }
+
+  if(e.target?.id==="kinScheduleSave"){
+    const times=[1,2,3].map(i=>document.getElementById("kinSchedule"+i).value);
+    e.target.disabled=true;document.getElementById("kinScheduleStatus").textContent="反映中...";
+    try{
+      const d=await api("/api/admin/auto-schedule",{method:"PUT",body:JSON.stringify({times_jst:times})});
+      document.getElementById("kinScheduleStatus").textContent=`✓ ${d.times_jst.join(" / ")}（日本時間）でGitHubへ反映しました`;
+    }catch(err){document.getElementById("kinScheduleStatus").textContent="更新エラー: "+err.message}
+    finally{e.target.disabled=false}
+  }
+});
+
+document.addEventListener("DOMContentLoaded",()=>{
+  setTimeout(()=>{window.kinLoadAutoListed?.();window.kinLoadAlerts?.();window.kinLoadSchedule?.()},800);
+});
+</script>
+
+</body></html>

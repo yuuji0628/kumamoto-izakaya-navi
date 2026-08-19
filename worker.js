@@ -307,6 +307,465 @@ async function ensureSchema(env) {
 
   await schemaPromise;
 }
+
+async function ensureKinExtendedSchema(env) {
+  await ensureSchema(env);
+
+  const info = await env.DB.prepare("PRAGMA table_info(shops)").all();
+  const cols = new Set((info.results || []).map(x => String(x.name || "")));
+  const additions = [
+    ["budget_min","INTEGER"],
+    ["budget_max","INTEGER"],
+    ["seats","INTEGER"],
+    ["is_featured","INTEGER NOT NULL DEFAULT 0"],
+    ["is_new","INTEGER NOT NULL DEFAULT 1"],
+    ["sort_order","INTEGER NOT NULL DEFAULT 100"],
+    ["listing_status","TEXT NOT NULL DEFAULT 'published'"],
+    ["published_at","TEXT DEFAULT ''"],
+    ["business_status","TEXT DEFAULT 'OPERATIONAL'"],
+    ["website","TEXT DEFAULT ''"]
+  ];
+  for (const [name,type] of additions) {
+    if (!cols.has(name)) {
+      await env.DB.prepare(`ALTER TABLE shops ADD COLUMN ${name} ${type}`).run();
+    }
+  }
+
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kin_admin_alerts(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      alert_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT DEFAULT '',
+      shop_id INTEGER,
+      is_read INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    )
+  `).run();
+
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS shop_analytics(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      shop_id INTEGER NOT NULL,
+      action TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )
+  `).run();
+
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_kin_alerts_read
+    ON kin_admin_alerts(is_read, id DESC)
+  `).run().catch(()=>{});
+}
+
+function kinListingStatus(v){
+  return String(v||"").toLowerCase()==="provisional"?"provisional":"published";
+}
+function kinPublicShop(r){
+  if(!r)return r;
+  const features=parseFeatures(r.features);
+  const provisional=kinListingStatus(r.listing_status)==="provisional";
+  const min=Number.isFinite(Number(r.budget_min))?Number(r.budget_min):null;
+  const max=Number.isFinite(Number(r.budget_max))?Number(r.budget_max):null;
+  let budget=String(r.budget||"").trim();
+  if(!budget && (min!==null || max!==null)){
+    if(min!==null && max!==null)budget=`${min.toLocaleString("ja-JP")}〜${max.toLocaleString("ja-JP")}円`;
+    else if(min!==null)budget=`${min.toLocaleString("ja-JP")}円〜`;
+    else budget=`〜${max.toLocaleString("ja-JP")}円`;
+  }
+  return {
+    ...r,
+    features,
+    budget,
+    listing_status:provisional?"provisional":"published",
+    is_provisional:provisional?1:0,
+    name:provisional?`【KIN独自掲載】${String(r.name||"").replace(/^【KIN独自掲載】/,"")}`:r.name
+  };
+}
+
+async function kinAlert(env,{type="info",title="お知らせ",message="",shopId=null}={}){
+  await ensureKinExtendedSchema(env);
+  await env.DB.prepare(`
+    INSERT INTO kin_admin_alerts(alert_type,title,message,shop_id,is_read,created_at)
+    VALUES(?,?,?,?,0,?)
+  `).bind(
+    clean(type,50),clean(title,180),clean(message,2000),
+    shopId===null?null:Number(shopId),nowIso()
+  ).run();
+}
+
+function kinGoogleKey(env){
+  return String(
+    env.GOOGLE_PLACES_API_KEY ||
+    env.GOOGLE_MAPS_API_KEY ||
+    env.GOOGLE_API_KEY || ""
+  ).trim();
+}
+
+async function kinGoogleTextSearch(env,query,max=8){
+  const key=kinGoogleKey(env);
+  if(!key)return {ok:false,error:"GOOGLE_PLACES_KEY_MISSING",places:[]};
+  try{
+    const r=await fetch("https://places.googleapis.com/v1/places:searchText",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "X-Goog-Api-Key":key,
+        "X-Goog-FieldMask":"places.id,places.displayName,places.formattedAddress,places.primaryType,places.types,places.businessStatus"
+      },
+      body:JSON.stringify({textQuery:query,languageCode:"ja",regionCode:"JP",pageSize:Math.max(1,Math.min(Number(max)||8,20))})
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)return {ok:false,error:d?.error?.message||`GOOGLE_HTTP_${r.status}`,places:[]};
+    return {ok:true,places:Array.isArray(d.places)?d.places:[]};
+  }catch(e){
+    return {ok:false,error:String(e?.message||e),places:[]};
+  }
+}
+
+async function kinGoogleDetails(env,id){
+  const key=kinGoogleKey(env);
+  if(!key||!id)return {ok:false,place:null};
+  try{
+    const mask=[
+      "id","displayName","formattedAddress","primaryType","types","businessStatus",
+      "nationalPhoneNumber","internationalPhoneNumber","regularOpeningHours",
+      "websiteUri","priceLevel","priceRange","googleMapsUri"
+    ].join(",");
+    const r=await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(id)}`,{
+      headers:{
+        "X-Goog-Api-Key":key,
+        "X-Goog-FieldMask":mask,
+        "Accept-Language":"ja"
+      }
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)return {ok:false,place:null,error:d?.error?.message||`GOOGLE_HTTP_${r.status}`};
+    return {ok:true,place:d};
+  }catch(e){
+    return {ok:false,place:null,error:String(e?.message||e)};
+  }
+}
+
+function kinPlaceName(p){return clean(p?.displayName?.text||p?.name||"",180)}
+function kinHours(p){
+  const a=p?.regularOpeningHours?.weekdayDescriptions;
+  return Array.isArray(a)?a.join(" / "):"";
+}
+function kinHoliday(p){
+  const a=p?.regularOpeningHours?.weekdayDescriptions;
+  if(!Array.isArray(a))return "";
+  return a.filter(x=>/休業|定休|closed/i.test(String(x))).map(x=>String(x).split(":")[0].trim()).join("・");
+}
+function kinPhone(p){return clean(p?.nationalPhoneNumber||p?.internationalPhoneNumber||"",100)}
+function kinWebsite(p){return clean(p?.websiteUri||"",600)}
+function kinPrice(p){
+  const level=String(p?.priceLevel||"").toUpperCase();
+  const table={
+    PRICE_LEVEL_FREE:[0,0],
+    PRICE_LEVEL_INEXPENSIVE:[1000,3000],
+    PRICE_LEVEL_MODERATE:[3000,5000],
+    PRICE_LEVEL_EXPENSIVE:[5000,8000],
+    PRICE_LEVEL_VERY_EXPENSIVE:[8000,15000]
+  };
+  return table[level]||[null,null];
+}
+
+function kinNameNorm(v){
+  return String(v||"").normalize("NFKC").toLowerCase()
+    .replace(/【kin独自掲載】/ig,"")
+    .replace(/[^\p{L}\p{N}]/gu,"");
+}
+function kinNameScore(a,b){
+  const x=kinNameNorm(a),y=kinNameNorm(b);
+  if(!x||!y)return 0;
+  if(x===y)return 100;
+  if(x.includes(y)||y.includes(x))return 92;
+  const big=s=>new Set([...Array(Math.max(0,s.length-1))].map((_,i)=>s.slice(i,i+2)));
+  const A=big(x),B=big(y);
+  if(!A.size||!B.size)return 0;
+  let hit=0; for(const z of A)if(B.has(z))hit++;
+  return Math.round(200*hit/(A.size+B.size));
+}
+
+function kinInstagramHandle(url){
+  const s=String(url||"").trim();
+  const m=s.match(/instagram\.com\/([A-Za-z0-9._]+)/i);
+  if(m && !["p","reel","reels","stories","explore","accounts","direct"].includes(m[1].toLowerCase()))return m[1];
+  if(/^@?[A-Za-z0-9._]+$/.test(s))return s.replace(/^@/,"");
+  return "";
+}
+
+async function kinOfficialInstagram(website){
+  if(!/^https?:\/\//i.test(String(website||"")))return "";
+  try{
+    const r=await fetch(website,{headers:{"User-Agent":"KUMAMOTO-IZAKAYA-NAVI/1.19"}});
+    if(!r.ok)return "";
+    const html=(await r.text()).slice(0,260000);
+    for(const m of html.matchAll(/https?:\/\/(?:www\.)?instagram\.com\/([A-Za-z0-9._]+)/gi)){
+      const h=kinInstagramHandle(m[0]);
+      if(h)return `https://www.instagram.com/${h}/`;
+    }
+  }catch{}
+  return "";
+}
+
+async function kinInstagramSearch(env,{name,area,website=""}={}){
+  const official=await kinOfficialInstagram(website);
+  if(official)return {instagram:official,score:100,source:"official_website"};
+
+  const key=String(env.SERPAPI_API_KEY||"").trim();
+  if(!key)return {instagram:"",score:0,source:"none"};
+
+  const u=new URL("https://serpapi.com/search.json");
+  u.searchParams.set("engine","google");
+  u.searchParams.set("q",`"${name}" Instagram ${area||"熊本"} 熊本`);
+  u.searchParams.set("hl","ja");u.searchParams.set("gl","jp");
+  u.searchParams.set("num","10");u.searchParams.set("api_key",key);
+  try{
+    const r=await fetch(u);
+    if(!r.ok)return {instagram:"",score:0,source:"serpapi"};
+    const d=await r.json();
+    let best=null;
+    for(const item of (d.organic_results||[])){
+      const h=kinInstagramHandle(item.link||"");
+      if(!h)continue;
+      const text=`${item.title||""} ${item.snippet||""}`;
+      let score=Math.round(kinNameScore(name,text)*.75);
+      if(area && text.includes(area))score+=10;
+      if(/熊本/.test(text))score+=7;
+      if(/居酒屋|酒場|焼鳥|やきとり|海鮮|和食|料理|dining/i.test(text))score+=5;
+      if(/公式|official/i.test(text))score+=8;
+      score=Math.min(99,score);
+      if(!best||score>best.score)best={instagram:`https://www.instagram.com/${h}/`,score,source:"serpapi"};
+    }
+    return best&&best.score>=90?best:{instagram:"",score:best?.score||0,source:"serpapi",candidate:best};
+  }catch{
+    return {instagram:"",score:0,source:"serpapi"};
+  }
+}
+
+async function kinFindGoogleShop(env,name,area){
+  const r=await kinGoogleTextSearch(env,`${name} ${area||"熊本"} 熊本 居酒屋`,5);
+  if(!r.ok)return {ok:false,error:r.error};
+  let best=null;
+  for(const p of r.places){
+    const n=kinPlaceName(p),addr=String(p.formattedAddress||"");
+    if(!addr.includes("熊本"))continue;
+    let score=kinNameScore(name,n);
+    if(area && addr.includes(area))score+=8;
+    if(!best||score>best.score)best={place:p,score};
+  }
+  return best&&best.score>=72?{ok:true,matched:true,...best}:{ok:true,matched:false,score:best?.score||0};
+}
+
+const KIN_DISCOVERY_PAIRS = [
+  ["熊本市","居酒屋"],["熊本市","郷土料理"],["熊本市","海鮮居酒屋"],["熊本市","焼き鳥"],
+  ["熊本市","焼肉居酒屋"],["熊本市","創作居酒屋"],["熊本市","個室居酒屋"],["八代市","居酒屋"],
+  ["天草市","居酒屋"],["人吉市","居酒屋"],["玉名市","居酒屋"],["山鹿市","居酒屋"],
+  ["菊池市","居酒屋"],["宇城市","居酒屋"],["阿蘇市","居酒屋"],["合志市","居酒屋"]
+];
+
+async function kinAutoDiscover(env,{maxListings=12,pairLimit=8,perPairLimit=3}={}){
+  await ensureKinExtendedSchema(env);
+  const created=[],searched=[],rejected=[];
+  const max=Math.max(1,Math.min(Number(maxListings)||12,25));
+  for(const [area,kind] of KIN_DISCOVERY_PAIRS.slice(0,Math.max(1,Math.min(Number(pairLimit)||8,KIN_DISCOVERY_PAIRS.length)))){
+    if(created.length>=max)break;
+    const q=`${area} ${kind} 熊本`;
+    const sr=await kinGoogleTextSearch(env,q,Math.max(3,Math.min(Number(perPairLimit)||3,8)));
+    searched.push({area,type:kind,query:q,ok:sr.ok,raw_found:sr.places?.length||0,error:sr.error||""});
+    if(!sr.ok)continue;
+    for(const p of sr.places){
+      if(created.length>=max)break;
+      const name=kinPlaceName(p),address=clean(p.formattedAddress,400);
+      if(!name||!address||!address.includes("熊本"))continue;
+      const dup=await env.DB.prepare(`
+        SELECT id FROM shops
+        WHERE lower(replace(name,' ',''))=lower(replace(?,' ',''))
+           OR (address<>'' AND address=?)
+        LIMIT 1
+      `).bind(name,address).first();
+      if(dup){rejected.push({name,reason:"DUPLICATE"});continue;}
+
+      const dr=await kinGoogleDetails(env,p.id);
+      const gp=dr.ok?dr.place:p;
+      const [bmin,bmax]=kinPrice(gp);
+      let website=kinWebsite(gp);
+      const ig=await kinInstagramSearch(env,{name,area,website});
+      const t=nowIso();
+      let slug=slugify(name);
+      const ex=await env.DB.prepare("SELECT id FROM shops WHERE slug=?").bind(slug).first();
+      if(ex)slug+=`-${Date.now().toString(36)}`;
+
+      const r=await env.DB.prepare(`
+        INSERT INTO shops(
+          slug,name,area,genre,address,hours,holiday,budget,phone,instagram,features,description,
+          is_published,created_at,updated_at,budget_min,budget_max,seats,is_featured,is_new,
+          sort_order,listing_status,published_at,business_status,website
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      `).bind(
+        slug,name,area,kind,address,kinHours(gp),kinHoliday(gp),"",kinPhone(gp),ig.instagram||"",
+        JSON.stringify([]),
+        `${area}の${kind}として公開情報をもとにKUMAMOTO IZAKAYA NAVIが独自掲載しています。`,
+        1,t,t,bmin,bmax,null,0,1,100,"provisional",t,
+        String(gp.businessStatus||"OPERATIONAL"),website
+      ).run();
+      const id=Number(r.meta?.last_row_id||0);
+      created.push({shop_id:id,id,name,slug,area,genre:kind,instagram:ig.instagram||"",instagram_score:ig.score||0});
+      await kinAlert(env,{
+        type:"new_shop",
+        title:`新店舗を自動掲載: ${name}`,
+        message:`${area} / ${kind} をKIN独自掲載しました。${ig.instagram?" Instagramも高一致で取得済み。":" Instagramは未取得です。"}`,
+        shopId:id
+      });
+    }
+  }
+  return {ok:true,created,searched,rejected_count:rejected.length,rejected};
+}
+
+async function kinRefreshMissing(env,{limit=20,afterId=0}={}){
+  await ensureKinExtendedSchema(env);
+  const r=await env.DB.prepare(`
+    SELECT * FROM shops
+    WHERE COALESCE(listing_status,'published')='provisional'
+      AND id>?
+      AND (
+        COALESCE(TRIM(address),'')='' OR COALESCE(TRIM(hours),'')='' OR
+        COALESCE(TRIM(phone),'')='' OR COALESCE(TRIM(instagram),'')='' OR
+        COALESCE(TRIM(genre),'')='' OR budget_min IS NULL OR budget_max IS NULL
+      )
+    ORDER BY id ASC LIMIT ?
+  `).bind(Number(afterId)||0,Math.max(1,Math.min(Number(limit)||20,40))).all();
+
+  const updated=[],failed=[];
+  for(const s of (r.results||[])){
+    try{
+      const f=await kinFindGoogleShop(env,String(s.name||"").replace(/^【KIN独自掲載】/,""),s.area);
+      if(!f.matched)continue;
+      const d=await kinGoogleDetails(env,f.place.id);
+      const gp=d.ok?d.place:f.place;
+      const [bmin,bmax]=kinPrice(gp);
+      const website=kinWebsite(gp)||s.website||"";
+      let instagram=s.instagram||"";
+      if(!instagram){
+        const ig=await kinInstagramSearch(env,{name:s.name,area:s.area,website});
+        if(ig.instagram && ig.score>=90)instagram=ig.instagram;
+      }
+      await env.DB.prepare(`
+        UPDATE shops SET
+          address=?,hours=?,holiday=?,phone=?,instagram=?,budget_min=?,budget_max=?,website=?,
+          business_status=?,updated_at=?
+        WHERE id=?
+      `).bind(
+        clean(gp.formattedAddress||s.address,400),
+        kinHours(gp)||s.hours||"",kinHoliday(gp)||s.holiday||"",
+        kinPhone(gp)||s.phone||"",instagram,
+        bmin??s.budget_min,bmax??s.budget_max,website,
+        String(gp.businessStatus||s.business_status||"OPERATIONAL"),nowIso(),s.id
+      ).run();
+      updated.push({id:s.id,name:s.name,instagram});
+    }catch(e){failed.push({id:s.id,name:s.name,error:String(e?.message||e).slice(0,200)})}
+  }
+  const rows=r.results||[];
+  const next=rows.length?Number(rows[rows.length-1].id):Number(afterId)||0;
+  const more=await env.DB.prepare(`
+    SELECT id FROM shops
+    WHERE COALESCE(listing_status,'published')='provisional' AND id>?
+      AND (COALESCE(TRIM(address),'')='' OR COALESCE(TRIM(hours),'')='' OR
+           COALESCE(TRIM(phone),'')='' OR COALESCE(TRIM(instagram),'')='' OR
+           budget_min IS NULL OR budget_max IS NULL)
+    ORDER BY id ASC LIMIT 1
+  `).bind(next).first();
+  return {ok:true,checked:rows.length,updated,failed,next_after_id:next,has_more:!!more};
+}
+
+async function kinCheckClosed(env,{limit=20,afterId=0}={}){
+  await ensureKinExtendedSchema(env);
+  const r=await env.DB.prepare(`
+    SELECT * FROM shops WHERE is_published=1 AND id>? ORDER BY id ASC LIMIT ?
+  `).bind(Number(afterId)||0,Math.max(1,Math.min(Number(limit)||20,50))).all();
+  const closed=[],failed=[];
+  for(const s of (r.results||[])){
+    try{
+      const f=await kinFindGoogleShop(env,String(s.name||"").replace(/^【KIN独自掲載】/,""),s.area);
+      if(!f.matched)continue;
+      const d=await kinGoogleDetails(env,f.place.id);
+      const status=String((d.ok?d.place:f.place)?.businessStatus||"");
+      await env.DB.prepare("UPDATE shops SET business_status=?,updated_at=? WHERE id=?")
+        .bind(status||"OPERATIONAL",nowIso(),s.id).run();
+      if(status==="CLOSED_PERMANENTLY"||status==="CLOSED_TEMPORARILY"){
+        const existing=await env.DB.prepare(`
+          SELECT id FROM kin_admin_alerts
+          WHERE alert_type='closed_shop' AND shop_id=? AND is_read=0 LIMIT 1
+        `).bind(s.id).first();
+        if(!existing){
+          await kinAlert(env,{
+            type:"closed_shop",
+            title:status==="CLOSED_PERMANENTLY"?"閉業の可能性":"一時休業の可能性",
+            message:`Google Placesで「${s.name}」が${status==="CLOSED_PERMANENTLY"?"閉業":"一時休業"}として確認されました。`,
+            shopId:s.id
+          });
+        }
+        closed.push({id:s.id,name:s.name,business_status:status});
+      }
+    }catch(e){failed.push({id:s.id,name:s.name,error:String(e?.message||e).slice(0,200)})}
+  }
+  const rows=r.results||[],next=rows.length?Number(rows[rows.length-1].id):Number(afterId)||0;
+  const more=await env.DB.prepare("SELECT id FROM shops WHERE is_published=1 AND id>? ORDER BY id ASC LIMIT 1").bind(next).first();
+  return {ok:true,checked:rows.length,closed,failed,next_after_id:next,has_more:!!more};
+}
+
+function kinJstToCron(v){
+  const m=String(v||"").match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if(!m)return "";
+  const total=(Number(m[1])*60+Number(m[2])-540+1440)%1440;
+  return `${total%60} ${Math.floor(total/60)} * * *`;
+}
+function kinCronToJst(v){
+  const m=String(v||"").match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/);
+  if(!m)return "";
+  const total=(Number(m[2])*60+Number(m[1])+540)%1440;
+  return `${String(Math.floor(total/60)).padStart(2,"0")}:${String(total%60).padStart(2,"0")}`;
+}
+function kinSortTimes(a){return [...a].sort((x,y)=>x.localeCompare(y))}
+
+async function kinReadWrangler(env){
+  const c=githubConfig(env);
+  const d=await githubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc?ref=${encodeURIComponent(c.branch)}`);
+  const content=base64ToUtf8(d.content||"");
+  return {config:JSON.parse(content),sha:d.sha,c};
+}
+async function kinUpdateSchedule(env,times){
+  const good=times.map(x=>clean(x,5));
+  if(good.length!==3||good.some(x=>!kinJstToCron(x))||new Set(good).size!==3)throw new Error("INVALID_SCHEDULE");
+  const sorted=kinSortTimes(good);
+  const {config,sha,c}=await kinReadWrangler(env);
+  config.triggers={...(config.triggers||{}),crons:sorted.map(kinJstToCron)};
+  config.vars={...(config.vars||{}),KIN_VERSION:"1.19",KIN_SCHEDULE_UPDATED_AT:new Date().toISOString()};
+  const result=await githubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
+    method:"PUT",headers:{"content-type":"application/json"},
+    body:JSON.stringify({
+      message:`admin: update auto discovery schedule ${sorted.join(" / ")} JST`,
+      content:utf8ToBase64(JSON.stringify(config,null,2)+"\n"),
+      sha,branch:c.branch
+    })
+  });
+  return {ok:true,times_jst:sorted,crons:config.triggers.crons,commit_sha:result.commit?.sha||""};
+}
+
+async function kinScheduledMaintenance(env){
+  const discovery=await kinAutoDiscover(env,{maxListings:5,pairLimit:5,perPairLimit:2});
+  const missing=await kinRefreshMissing(env,{limit:20,afterId:0});
+  const closed=await kinCheckClosed(env,{limit:20,afterId:0});
+  await kinAlert(env,{
+    type:"scheduled_summary",
+    title:"予約メンテナンス完了",
+    message:`新規掲載 ${discovery.created.length}店舗 / 情報補完 ${missing.updated.length}店舗 / 閉業候補 ${closed.closed.length}店舗`
+  });
+  return {discovery,missing,closed};
+}
+
 async function adminCount(env) {
   await ensureSchema(env);
   const r = await env.DB.prepare("SELECT COUNT(*) AS c FROM admins").first();
@@ -377,6 +836,7 @@ async function serveAsset(env, request, path) {
 async function handleApi(request, env, url) {
   try {
     await ensureSchema(env);
+    await ensureKinExtendedSchema(env);
   } catch (e) {
     return json({ok:false,error:"DB_NOT_READY",detail:String(e?.message||e)}, {status:503});
   }
@@ -471,7 +931,7 @@ async function handleApi(request, env, url) {
       SELECT * FROM shops WHERE is_published=1
       ORDER BY updated_at DESC, id DESC
     `).all();
-    return json({ok:true,shops:results.map(rowShop)});
+    return json({ok:true,shops:results.map(kinPublicShop)});
   }
 
   if (url.pathname === "/api/jobs" && request.method === "GET") {
@@ -505,7 +965,19 @@ async function handleApi(request, env, url) {
   }
 
   if (url.pathname === "/api/admin/version" && request.method === "GET") {
-    return json({ok:true,version:"1.11",admin_setup_fix:true,d1_schema_fix:true});
+    return json({ok:true,version:"1.19",admin_setup_fix:true,d1_schema_fix:true,bar_parity:true});
+  }
+
+
+  const kinAnalytics=url.pathname.match(/^\/api\/analytics\/([^/]+)$/);
+  if(kinAnalytics && request.method==="POST"){
+    let x={};try{x=await request.json()}catch{}
+    const action=clean(x.action,30);
+    if(!["view","instagram","map","phone","website"].includes(action))return json({ok:false,error:"INVALID_ACTION"},{status:400});
+    const shop=await env.DB.prepare("SELECT id FROM shops WHERE slug=? AND is_published=1 LIMIT 1").bind(decodeURIComponent(kinAnalytics[1])).first();
+    if(!shop)return json({ok:false,error:"NOT_FOUND"},{status:404});
+    await env.DB.prepare("INSERT INTO shop_analytics(shop_id,action,created_at) VALUES(?,?,?)").bind(shop.id,action,nowIso()).run();
+    return json({ok:true});
   }
 
   // everything below requires admin
@@ -518,7 +990,7 @@ async function handleApi(request, env, url) {
     const {results=[]} = await env.DB.prepare(`
       SELECT * FROM shops ORDER BY updated_at DESC, id DESC
     `).all();
-    return json({ok:true,shops:results.map(rowShop)});
+    return json({ok:true,shops:results.map(x=>({...x,features:parseFeatures(x.features)}))});
   }
 
   if (url.pathname === "/api/admin/shops" && request.method === "POST") {
@@ -538,7 +1010,22 @@ async function handleApi(request, env, url) {
       clean(x.phone,100),clean(x.instagram,300),featuresJson(x.features),
       clean(x.description,5000),bool(x.is_published),t,t
     ).run();
-    return json({ok:true,id:r.meta?.last_row_id,slug},{status:201});
+    {
+      const id=Number(r.meta?.last_row_id||0);
+      await env.DB.prepare(`
+        UPDATE shops SET listing_status=?,published_at=?,is_new=1,sort_order=100,
+          budget_min=?,budget_max=?,seats=?,is_featured=?,business_status='OPERATIONAL'
+        WHERE id=?
+      `).bind(
+        kinListingStatus(x.listing_status),
+        bool(x.is_published)?t:"",
+        x.budget_min===""||x.budget_min==null?null:Number(x.budget_min),
+        x.budget_max===""||x.budget_max==null?null:Number(x.budget_max),
+        x.seats===""||x.seats==null?null:Number(x.seats),
+        bool(x.is_featured),id
+      ).run();
+      return json({ok:true,id,slug},{status:201});
+    }
   }
 
   const shopMatch = url.pathname.match(/^\/api\/admin\/shops\/(\d+)$/);
@@ -874,6 +1361,123 @@ async function handleApi(request, env, url) {
     return json({ok:true,found:items.length,added});
   }
 
+
+  // ----- BAR NAVI parity: automatic discovery / maintenance -----
+  if (url.pathname === "/api/admin/leads/auto-discover" && request.method === "POST") {
+    let x={};try{x=await request.json()}catch{}
+    const d=await kinAutoDiscover(env,{
+      maxListings:Math.max(1,Math.min(Number(x.max_listings)||12,25)),
+      pairLimit:Math.max(1,Math.min(Number(x.pair_limit)||8,16)),
+      perPairLimit:Math.max(1,Math.min(Number(x.per_pair_limit)||3,8))
+    });
+    return json(d);
+  }
+
+  if (url.pathname === "/api/admin/leads/auto-listed" && request.method === "GET") {
+    const r=await env.DB.prepare(`
+      SELECT * FROM shops
+      WHERE COALESCE(listing_status,'published')='provisional'
+      ORDER BY id DESC LIMIT 300
+    `).all();
+    return json({ok:true,shops:(r.results||[]).map(x=>({...x,features:parseFeatures(x.features)}))});
+  }
+
+  const autoAction=url.pathname.match(/^\/api\/admin\/leads\/auto-listed\/(\d+)\/(unpublish|restore)$/);
+  if(autoAction && request.method==="POST"){
+    const id=Number(autoAction[1]),action=autoAction[2];
+    await env.DB.prepare("UPDATE shops SET is_published=?,updated_at=? WHERE id=? AND COALESCE(listing_status,'published')='provisional'")
+      .bind(action==="restore"?1:0,nowIso(),id).run();
+    return json({ok:true,id,is_published:action==="restore"?1:0});
+  }
+
+  if (url.pathname === "/api/admin/leads/refresh-missing" && request.method === "POST") {
+    let x={};try{x=await request.json()}catch{}
+    return json(await kinRefreshMissing(env,{limit:x.limit,afterId:x.after_id}));
+  }
+
+  if (url.pathname === "/api/admin/leads/refresh-instagram" && request.method === "POST") {
+    let x={};try{x=await request.json()}catch{}
+    const limit=Math.max(1,Math.min(Number(x.limit)||20,40)),after=Number(x.after_id)||0;
+    const r=await env.DB.prepare(`
+      SELECT * FROM shops
+      WHERE COALESCE(listing_status,'published')='provisional'
+        AND COALESCE(TRIM(instagram),'')='' AND id>?
+      ORDER BY id ASC LIMIT ?
+    `).bind(after,limit).all();
+    const updated=[],candidates=[],failed=[];
+    for(const s of (r.results||[])){
+      try{
+        let website=s.website||"";
+        if(!website){
+          const f=await kinFindGoogleShop(env,s.name,s.area);
+          if(f.matched){
+            const d=await kinGoogleDetails(env,f.place.id);
+            website=kinWebsite(d.ok?d.place:f.place);
+          }
+        }
+        const ig=await kinInstagramSearch(env,{name:s.name,area:s.area,website});
+        if(ig.instagram&&ig.score>=90){
+          await env.DB.prepare("UPDATE shops SET instagram=?,website=?,updated_at=? WHERE id=?")
+            .bind(ig.instagram,website,nowIso(),s.id).run();
+          updated.push({id:s.id,name:s.name,instagram:ig.instagram,score:ig.score});
+        }else if(ig.candidate&&ig.candidate.score>=70){
+          candidates.push({id:s.id,name:s.name,score:ig.candidate.score,instagram:ig.candidate.instagram});
+        }
+      }catch(e){failed.push({id:s.id,name:s.name,error:String(e?.message||e).slice(0,180)})}
+    }
+    const rows=r.results||[],next=rows.length?Number(rows[rows.length-1].id):after;
+    const more=await env.DB.prepare(`
+      SELECT id FROM shops WHERE COALESCE(listing_status,'published')='provisional'
+      AND COALESCE(TRIM(instagram),'')='' AND id>? ORDER BY id ASC LIMIT 1
+    `).bind(next).first();
+    return json({ok:true,checked:rows.length,updated,candidates,failed,next_after_id:next,has_more:!!more});
+  }
+
+  if (url.pathname === "/api/admin/leads/check-closed" && request.method === "POST") {
+    let x={};try{x=await request.json()}catch{}
+    return json(await kinCheckClosed(env,{limit:x.limit,afterId:x.after_id}));
+  }
+
+  if (url.pathname === "/api/admin/alerts" && request.method === "GET") {
+    const r=await env.DB.prepare("SELECT * FROM kin_admin_alerts ORDER BY id DESC LIMIT 60").all();
+    return json({ok:true,alerts:r.results||[],unread:(r.results||[]).filter(x=>!Number(x.is_read)).length});
+  }
+
+  const alertRead=url.pathname.match(/^\/api\/admin\/alerts\/(\d+)\/read$/);
+  if(alertRead && request.method==="POST"){
+    await env.DB.prepare("UPDATE kin_admin_alerts SET is_read=1 WHERE id=?").bind(Number(alertRead[1])).run();
+    return json({ok:true});
+  }
+
+  const maint=url.pathname.match(/^\/api\/admin\/shops\/(\d+)\/maintenance-action$/);
+  if(maint && request.method==="POST"){
+    let x={};try{x=await request.json()}catch{}
+    const id=Number(maint[1]),action=String(x.action||"");
+    if(action==="operational"){
+      await env.DB.prepare("UPDATE shops SET business_status='OPERATIONAL',is_published=1,updated_at=? WHERE id=?").bind(nowIso(),id).run();
+    }else if(action==="temporary_closed"){
+      await env.DB.prepare("UPDATE shops SET business_status='CLOSED_TEMPORARILY',is_published=1,updated_at=? WHERE id=?").bind(nowIso(),id).run();
+    }else if(action==="unpublish"){
+      await env.DB.prepare("UPDATE shops SET business_status='UNPUBLISHED',is_published=0,updated_at=? WHERE id=?").bind(nowIso(),id).run();
+    }else return json({ok:false,error:"INVALID_ACTION"},{status:400});
+    await env.DB.prepare("UPDATE kin_admin_alerts SET is_read=1 WHERE shop_id=? AND alert_type='closed_shop'").bind(id).run();
+    return json({ok:true});
+  }
+
+  if (url.pathname === "/api/admin/auto-schedule" && request.method === "GET") {
+    try{
+      const {config}=await kinReadWrangler(env);
+      const times=kinSortTimes((config?.triggers?.crons||[]).map(kinCronToJst).filter(Boolean));
+      return json({ok:true,timezone:"Asia/Tokyo",times_jst:times,crons:config?.triggers?.crons||[]});
+    }catch(e){return json({ok:false,error:"SCHEDULE_READ_FAILED",message:String(e?.message||e)},{status:502})}
+  }
+
+  if (url.pathname === "/api/admin/auto-schedule" && request.method === "PUT") {
+    let x={};try{x=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+    try{return json(await kinUpdateSchedule(env,Array.isArray(x.times_jst)?x.times_jst:[]))}
+    catch(e){return json({ok:false,error:"SCHEDULE_UPDATE_FAILED",message:String(e?.message||e)},{status:400})}
+  }
+
   if (url.pathname === "/api/admin/access-summary" && request.method === "GET") {
     const shopCount=await env.DB.prepare("SELECT COUNT(*) c FROM shops").first();
     const pubCount=await env.DB.prepare("SELECT COUNT(*) c FROM shops WHERE is_published=1").first();
@@ -926,5 +1530,11 @@ export default {
     }
 
     return env.ASSETS.fetch(request);
+  },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(
+      kinScheduledMaintenance(env).catch(e=>console.error("KIN scheduled maintenance failed",e))
+    );
   }
 };
