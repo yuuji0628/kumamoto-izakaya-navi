@@ -74,7 +74,10 @@ async function home(){
  const box=document.getElementById("homeShops"); if(!box)return; const shops=await getShops();
  box.innerHTML=shops.slice(0,3).map(card).join("");
  const news=document.getElementById("homeNews");
- if(news)news.innerHTML=shops.slice(0,4).map((s,i)=>`<a class="news-item" href="shop.html?slug=${encodeURIComponent(s.slug||s.id)}"><time>${i===0?"NEW":"8/"+(16-i)}</time><div><b>${esc(s.name)} を掲載しました</b><small>${esc(s.area||"熊本県")}の店舗情報を公開しました。</small></div><span>›</span></a>`).join("");
+ if(news)news.innerHTML=shops.slice(0,4).map((s,i)=>{
+  const displayName=String(s.name||"").replace(/^【KIN独自掲載】/,"").trim();
+  return `<a class="news-item" href="shop.html?slug=${encodeURIComponent(s.slug||s.id)}"><time>${i===0?"NEW":"8/"+(16-i)}</time><div><b>${esc(displayName)} を掲載しました</b><small>${esc(s.area||"熊本県")}の店舗情報を公開しました。</small></div><span>›</span></a>`;
+}).join("");
 }
 async function listShops(){
  const box=document.getElementById("shopList"); if(!box)return; const shops=await getShops();
